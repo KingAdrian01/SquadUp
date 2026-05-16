@@ -54,7 +54,11 @@ async function initFirebase(config) {
 
 // ── State ───────────────────────────────────────────────
 let myName = '';
-let myId = 'u_' + Math.random().toString(36).slice(2, 9);
+let myId = localStorage.getItem('bf_uid');
+if (!myId) {
+  myId = 'u_' + Math.random().toString(36).slice(2, 9);
+  localStorage.setItem('bf_uid', myId);
+}
 let lobbyId = null;
 let isHost = false;
 let unsubFns = [];
@@ -663,14 +667,23 @@ async function checkNextDistributor(gs, updates) {
 
 async function confirmSips() {
   if (!lastGameState || isProcessing) return;
+  // Verhindern, dass man mehrfach klickt, wenn man bereits bestätigt hat
+  if (lastGameState.confirmedDrinkers && lastGameState.confirmedDrinkers[myId]) return;
+
   isProcessing = true;
   try {
     const updates = {};
     updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
     updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
     
-    const confirmedCount = Object.keys(lastGameState.confirmedDrinkers || {}).length + 1;
-    if (confirmedCount >= lastGameState.playerOrder.length) {
+    // Berechne die Anzahl der Bestätigungen basierend auf dem aktuellen Stand + mir
+    const currentlyConfirmed = Object.keys(lastGameState.confirmedDrinkers || {});
+    if (!currentlyConfirmed.includes(myId)) currentlyConfirmed.push(myId);
+
+    // Wir prüfen gegen die Anzahl der aktuell im Spiel befindlichen Spieler
+    const totalPlayers = Object.keys(lastGameState.players || {}).length;
+
+    if (currentlyConfirmed.length >= totalPlayers) {
       // Everyone confirmed -> Next Card or Phase
       updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
       updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = {};
@@ -685,6 +698,7 @@ async function confirmSips() {
     await update(ref(db), updates);
   } catch (e) {
     console.error(e);
+    toast("Fehler bei der Bestätigung ❌");
   } finally {
     isProcessing = false;
   }
@@ -1094,6 +1108,7 @@ function renderAllHands(gs) {
     const hand = p.hand || [];
     const isMe = pid === myId;
     const toDrink = p.sipsToDrink || 0;
+    const total = p.sipsTotal || 0;
 
     html += `<div class="player-hand-row">
       <div class="player-hand-name">${escHtml(p.name)}${isMe ? ' 👤' : ''}</div>
@@ -1103,10 +1118,8 @@ function renderAllHands(gs) {
           : hand.map(c => cardHTML(c, true)).join('')}
       </div>
       <div class="player-sip-status">
-        ${toDrink > 0 ? `
-          <div class="sip-count-badge">🍺 ${toDrink}</div>
-          ${isMe ? `<button class="btn-confirm-sip" onclick="confirmSips()">✅</button>` : ''}
-        ` : ''}
+        ${toDrink > 0 ? `<div class="sip-count-badge">🍺 ${toDrink}</div>` : ''}
+        <div style="font-size:12px;color:var(--text-dim);margin-left:8px">Gesamt: ${total}</div>
       </div>
     </div>`;
   }
