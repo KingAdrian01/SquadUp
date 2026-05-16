@@ -555,8 +555,41 @@ async function handleRound1Choice(choice, gs) {
 
     const nextPlayerIdx = gs.currentPlayerIndex + 1;
     if (nextPlayerIdx >= gs.playerOrder.length) {
-      updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
-      updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = 0;
+      // Alle Spieler haben die aktuelle Karte gezogen -> Ersten Verteiler suchen
+      let firstGiverIdx = -1;
+      for (let i = 0; i < gs.playerOrder.length; i++) {
+        const pid = gs.playerOrder[i];
+        let pool = gs.players[pid].sipPool || 0;
+        // Wenn ich es bin, berechne den soeben gewonnenen Pool mit ein
+        if (pid === myId && correct) pool += (step + 1);
+        if (pool > 0) {
+          firstGiverIdx = i;
+          break;
+        }
+      }
+
+      if (firstGiverIdx !== -1) {
+        updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
+        updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = firstGiverIdx;
+      } else {
+        // Niemand hat Schlucke zum Verteilen -> Prüfen ob jemand trinken muss
+        let needsToDrink = false;
+        for (const pid of gs.playerOrder) {
+          const toDrink = (gs.players[pid].sipsToDrink || 0) + (pid === myId && !correct ? (step + 1) : 0);
+          if (toDrink > 0) { needsToDrink = true; break; }
+        }
+
+        if (needsToDrink) {
+          updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
+          updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = Date.now();
+          updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = {};
+        } else {
+          // Keiner verteilt, keiner trinkt -> Direkt zur nächsten Karte
+          const nextCard = gs.currentRoundCard + 1;
+          if (nextCard >= 4) updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
+          else updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextCard;
+        }
+      }
       updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
     } else {
       updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextPlayerIdx;
