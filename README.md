@@ -12,8 +12,3 @@
 *   **Frontend:** HTML5, Modern CSS (Flexbox/Grid), JavaScript (ES6+).
 *   **Backend:** Firebase Realtime Database für die Live-Synchronisation.
 *   **Deployment:** Vercel.
-
-### Roadmap:
-- [ ] Weitere Party-Klassiker hinzufügen
-- [ ] Individuelle Avatar-Auswahl
-- [ ] Trink-Statistiken für die gesamte Session
