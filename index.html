@@ -94,6 +94,19 @@
     <div class="toast" id="toast"></div>
   </div>
 
+  <!-- ===== DRINKING MODAL ===== -->
+  <div id="drinking-modal" class="modal-overlay">
+    <div class="modal-box drinking-popup">
+      <div class="drinking-emoji">🍺</div>
+      <h2 id="drinking-count">0</h2>
+      <p>Schlucke für dich!</p>
+      <p class="modal-hint" id="drinking-status-text">Trink deine Schlucke!</p>
+      <button class="btn btn-primary btn-large" id="btn-confirm-drinking" onclick="confirmSips()">
+        Ich habe getrunken ✅
+      </button>
+    </div>
+  </div>
+
   <!-- ===== FIREBASE CONFIG MODAL ===== -->
   <div id="firebase-modal" class="modal-overlay active">
     <div class="modal-box">

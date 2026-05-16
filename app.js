@@ -237,6 +237,7 @@ function enterLobbyScreen() {
   const unsub2 = onValue(gameRef, snap => {
     if (snap.exists()) {
       const game = snap.val();
+      lastGameState = game;
       if (game.phase === 'round1') {
         unsubFns.forEach(f => f());
         unsubFns = [];
@@ -307,6 +308,7 @@ async function startGame() {
       name: p.name,
       hand: [], // Start empty, filled during R1
       drawnCards: [],
+      sipPool: 0, // Schlucke, die man verteilen darf
       sipsToDrink: 0,
       sipsTotal: 0
     };
@@ -327,12 +329,15 @@ async function startGame() {
     players: playerStates,
     playerOrder: players.map(p => p.id),
     currentPlayerIndex: 0,
-    currentCardStep: 0, // 0=R/B, 1=H/T, 2=I/O, 3=Suit
+    currentRoundCard: 0, // 0 bis 3 (für die 4 Karten)
     drawnForCurrentPlayer: [],
     round1Done: false,
     pyramidIndex: 0,
-    distributeCount: 0,
-    distributeGiver: null,
+    distributionActive: false,
+    distributionGiverIndex: 0, // Wer ist gerade beim Verteilen dran
+    drinkingActive: false,
+    confirmedDrinkers: {},
+    drinkingStartTime: 0,
     busfahrerId: null,
     busStep: 0,
     busCards: [],
@@ -362,15 +367,24 @@ function renderGame(gs) {
   const cpBadge = document.getElementById('current-player-badge');
   const progress = document.getElementById('round-progress');
 
+  // Handle drinking popup
+  manageDrinkingPopup(gs);
+
   if (gs.phase === 'round1') {
     phaseBadge.textContent = 'Runde 1 – Kartenziehen';
     const order = gs.playerOrder;
     const currentId = order[gs.currentPlayerIndex];
     const currentPlayer = gs.players[currentId];
     const isMyTurn = currentId === myId;
-    const doneCount = gs.currentPlayerIndex;
-    cpBadge.innerHTML = `Dran: <strong>${escHtml(currentPlayer.name)}</strong>`;
-    progress.textContent = `${doneCount}/${order.length} fertig`;
+    
+    if (gs.distributionActive) {
+      const giverId = order[gs.distributionGiverIndex];
+      cpBadge.innerHTML = `Verteilen: <strong>${escHtml(gs.players[giverId].name)}</strong>`;
+    } else {
+      cpBadge.innerHTML = `Dran: <strong>${escHtml(currentPlayer.name)}</strong>`;
+    }
+    
+    progress.textContent = `Karte ${gs.currentRoundCard + 1}/4`;
     renderRound1(gs, isMyTurn, currentPlayer, area);
   } else if (gs.phase === 'round2') {
     phaseBadge.textContent = 'Runde 2 – Pyramide';
@@ -393,53 +407,49 @@ function renderGame(gs) {
 
 // ─ ROUND 1 ──────────────────────────────────────────────
 function renderRound1(gs, isMyTurn, currentPlayer, area) {
-  const drawn = gs.drawnForCurrentPlayer || [];
   const stepLabels = ['Rot oder Schwarz?', 'Höher oder Tiefer?', 'Innen oder Außen?', 'Welches Symbol?'];
-  const step = gs.currentCardStep;
+  const step = gs.currentRoundCard;
+  const giverId = gs.playerOrder[gs.distributionGiverIndex];
 
   let html = '';
 
   // Distribution phase
-  if (gs.distributeCount > 0) {
-    if (gs.distributeGiver === myId) {
+  if (gs.distributionActive) {
+    if (giverId === myId) {
+      const pool = gs.players[myId].sipPool || 0;
       html += `<div class="choice-section highlight-border">
         <div class="choice-title">Schlucke verteilen! 🍺</div>
-        <div class="choice-question">Wähle jemanden, der ${gs.distributeCount} Schlucke bekommt:</div>
-        <div class="distribute-grid">
-          ${gs.playerOrder.filter(id => id !== myId).map(id => `
-            <button class="btn btn-secondary distribute-btn" data-target="${id}">${escHtml(gs.players[id].name)}</button>
-          `).join('')}
+        <div class="choice-question">Du hast noch ${pool} Schlucke</div>
+        <div class="distribute-ui">
+          <select id="distribute-amount" class="sip-select">
+            ${Array.from({length: pool}, (_, i) => `<option value="${i+1}">${i+1}</option>`).join('')}
+          </select>
+          <div class="distribute-grid">
+            ${gs.playerOrder.filter(id => id !== myId).map(id => `
+              <button class="btn btn-secondary distribute-btn" data-target="${id}">${escHtml(gs.players[id].name)}</button>
+            `).join('')}
+          </div>
+          ${pool > 0 ? `<button class="btn btn-link" onclick="skipDistribution()">Rest verfallen lassen</button>` : ''}
         </div>
       </div>`;
     } else {
-      html += `<div class="info-box"><strong>${escHtml(gs.players[gs.distributeGiver].name)}</strong> verteilt gerade Schlucke...</div>`;
+      html += `<div class="info-box"><strong>${escHtml(gs.players[giverId].name)}</strong> verteilt gerade Schlucke...</div>`;
     }
   }
 
-  // Show drawn cards so far
-  if (drawn.length > 0) {
-    html += `<div class="choice-section">
-      <div class="choice-title">Bereits gezogen</div>
-      <div class="cards-row">
-        ${drawn.map(c => cardHTML(c)).join('')}
-      </div>
-    </div>`;
-  }
-
-  if (step < 4 && !gs.distributeCount) {
+  if (!gs.distributionActive && !gs.drinkingActive) {
     if (isMyTurn) {
       html += `<div class="choice-section">
         <div class="choice-title">Karte ${step + 1} von 4</div>
         <div class="choice-question">${stepLabels[step]}</div>
         <div class="choice-buttons">
-          ${getChoiceButtons(step, drawn)}
+          ${getChoiceButtons(step, currentPlayer.hand || [])}
         </div>
       </div>`;
     } else {
       html += `<div class="spectator-msg">
         <strong>${escHtml(currentPlayer.name)}</strong> ist dran...<br>
         <em>${stepLabels[step]}</em>
-        <div style="margin-top:16px"><div class="loading-dots"><span></span><span></span><span></span></div></div>
       </div>`;
     }
   }
@@ -449,14 +459,17 @@ function renderRound1(gs, isMyTurn, currentPlayer, area) {
 
   area.innerHTML = html;
 
-  if (isMyTurn && step < 4) {
+  if (isMyTurn && !gs.distributionActive && !gs.drinkingActive) {
     area.querySelectorAll('.choice-btn').forEach(btn => {
       btn.addEventListener('click', () => handleRound1Choice(btn.dataset.choice, gs));
     });
   }
-  if (isMyTurn && gs.distributeCount > 0) {
+  if (giverId === myId && gs.distributionActive) {
     area.querySelectorAll('.distribute-btn').forEach(btn => {
-      btn.addEventListener('click', () => distributeSips(btn.dataset.target, gs));
+      btn.addEventListener('click', () => {
+        const amt = parseInt(document.getElementById('distribute-amount').value);
+        distributeSips(btn.dataset.target, amt, gs);
+      });
     });
   }
 }
@@ -488,23 +501,23 @@ function getChoiceButtons(step, drawn) {
 async function handleRound1Choice(choice, gs) {
   if (!fbReady || isProcessing) return;
   isProcessing = true;
-  // Draw next card from deck
   const deckCopy = [...gs.deck];
   const drawnCard = deckCopy.shift();
-  const drawn = [...(gs.drawnForCurrentPlayer || [])];
-  const step = gs.currentCardStep;
+  const player = gs.players[myId];
+  const hand = [...(player.hand || [])];
+  const step = gs.currentRoundCard;
   let correct = false;
 
   if (step === 0) {
     correct = (choice === 'red') === isRed(drawnCard.suit);
   } else if (step === 1) {
-    const prev = VALUE_ORDER[drawn[0].value];
+    const prev = VALUE_ORDER[hand[0].value];
     const cur = VALUE_ORDER[drawnCard.value];
     if (choice === 'higher') correct = cur > prev;
     else if (choice === 'lower') correct = cur < prev;
     else correct = cur === prev;
   } else if (step === 2) {
-    const vals = drawn.map(c => VALUE_ORDER[c.value]);
+    const vals = hand.map(c => VALUE_ORDER[c.value]);
     const [lo, hi] = [Math.min(...vals), Math.max(...vals)];
     const cur = VALUE_ORDER[drawnCard.value];
     if (choice === 'inside') correct = cur > lo && cur < hi;
@@ -514,63 +527,119 @@ async function handleRound1Choice(choice, gs) {
   }
 
   const sips = correct ? 0 : (step + 1);
-  const distributeSipsCount = correct ? (step + 1) : 0;
-  const newDrawn = [...drawn, drawnCard];
+  const sipPoolBonus = correct ? (step + 1) : 0;
+  const newHand = [...hand, drawnCard];
 
   // Update state
   const updates = {};
   updates[`lobbies/${lobbyId}/game/deck`] = deckCopy;
-  updates[`lobbies/${lobbyId}/game/drawnForCurrentPlayer`] = newDrawn;
+  updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = newHand;
   
   if (!correct) {
     updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = (gs.players[myId].sipsToDrink || 0) + sips;
     updates[`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`] = (gs.players[myId].sipsTotal || 0) + sips;
     toast(`❌ Falsch! ${sips} Schluck${sips > 1 ? 'e' : ''} trinken 🍺`);
   } else {
-    updates[`lobbies/${lobbyId}/game/distributeCount`] = distributeSipsCount;
-    updates[`lobbies/${lobbyId}/game/distributeGiver`] = myId;
+    updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = (gs.players[myId].sipPool || 0) + sipPoolBonus;
     toast('✅ Richtig!');
   }
 
-  if (step < 3) {
-    updates[`lobbies/${lobbyId}/game/currentCardStep`] = step + 1;
+  const nextPlayerIdx = gs.currentPlayerIndex + 1;
+  if (nextPlayerIdx >= gs.playerOrder.length) {
+    // All players have drawn this card, go to distribution
+    updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
+    updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = 0;
+    updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
   } else {
-    updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = newDrawn;
-    const nextIndex = gs.currentPlayerIndex + 1;
-    if (nextIndex >= gs.playerOrder.length) {
-      updates[`lobbies/${lobbyId}/game/round1Done`] = true;
+    updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextPlayerIdx;
+  }
+
+  await update(ref(db), updates);
+  isProcessing = false;
+}
+
+async function distributeSips(targetId, amount, gs) {
+  if (isProcessing) return;
+  isProcessing = true;
+  const updates = {};
+  const giver = gs.players[myId];
+  const newPool = (giver.sipPool || 0) - amount;
+  
+  updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = newPool;
+  updates[`lobbies/${lobbyId}/game/players/${targetId}/sipsToDrink`] = (gs.players[targetId].sipsToDrink || 0) + amount;
+  updates[`lobbies/${lobbyId}/game/players/${targetId}/sipsTotal`] = (gs.players[targetId].sipsTotal || 0) + amount;
+
+  if (newPool <= 0) {
+    await checkNextDistributor(gs, updates);
+  } else {
+    await update(ref(db), updates);
+  }
+  isProcessing = false;
+}
+
+async function skipDistribution() {
+  if (isProcessing) return;
+  isProcessing = true;
+  const updates = {};
+  updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = 0;
+  await checkNextDistributor(lastGameState, updates);
+  isProcessing = false;
+}
+
+async function checkNextDistributor(gs, updates) {
+  let nextGiverIdx = gs.distributionGiverIndex + 1;
+  while (nextGiverIdx < gs.playerOrder.length) {
+    const nextPid = gs.playerOrder[nextGiverIdx];
+    if ((gs.players[nextPid].sipPool || 0) > 0) {
+      updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = nextGiverIdx;
+      await update(ref(db), updates);
+      return;
+    }
+    nextGiverIdx++;
+  }
+  // No more pool to distribute -> START DRINKING PHASE
+  updates[`lobbies/${lobbyId}/game/distributionActive`] = false;
+  updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
+  updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = Date.now();
+  updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = {};
+  await update(ref(db), updates);
+}
+
+async function confirmSips() {
+  if (!lastGameState || isProcessing) return;
+  isProcessing = true;
+  const updates = {};
+  updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
+  updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
+  
+  const confirmedCount = Object.keys(lastGameState.confirmedDrinkers || {}).length + 1;
+  if (confirmedCount >= lastGameState.playerOrder.length) {
+    // Everyone confirmed -> Next Card or Phase
+    updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
+    const nextRoundCard = lastGameState.currentRoundCard + 1;
+    if (nextRoundCard >= 4) {
+      updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
     } else {
-      updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextIndex;
-      updates[`lobbies/${lobbyId}/game/currentCardStep`] = 0;
-      updates[`lobbies/${lobbyId}/game/drawnForCurrentPlayer`] = [];
+      updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
+      updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
     }
   }
   await update(ref(db), updates);
   isProcessing = false;
 }
 
-async function distributeSips(targetId, gs) {
-  if (isProcessing) return;
-  isProcessing = true;
-  const count = gs.distributeCount;
-  const updates = {};
-  updates[`lobbies/${lobbyId}/game/players/${targetId}/sipsToDrink`] = (gs.players[targetId].sipsToDrink || 0) + count;
-  updates[`lobbies/${lobbyId}/game/distributeCount`] = 0;
-  updates[`lobbies/${lobbyId}/game/distributeGiver`] = null;
-  
-  // If round 1 was actually finished for this player, move phase or player
-  if (gs.round1Done && gs.distributeCount > 0) {
-    updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
-    updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
-    updates[`lobbies/${lobbyId}/game/currentCardStep`] = 0;
-    updates[`lobbies/${lobbyId}/game/drawnForCurrentPlayer`] = [];
-    updates[`lobbies/${lobbyId}/game/pyramidIndex`] = 0;
-    updates[`lobbies/${lobbyId}/game/round1Done`] = false;
+function manageDrinkingPopup(gs) {
+  const modal = document.getElementById('drinking-modal');
+  if (gs.drinkingActive) {
+    modal.classList.add('active');
+    const mySips = gs.players[myId].sipsToDrink || 0;
+    document.getElementById('drinking-count').textContent = mySips;
+    const hasConfirmed = gs.confirmedDrinkers && gs.confirmedDrinkers[myId];
+    document.getElementById('btn-confirm-drinking').style.display = hasConfirmed ? 'none' : 'block';
+    document.getElementById('drinking-status-text').textContent = hasConfirmed ? 'Warte auf andere...' : 'Trink deine Schlucke!';
+  } else {
+    modal.classList.remove('active');
   }
-
-  await update(ref(db), updates);
-  isProcessing = false;
-  toast(`Gerechtigkeit! ${count} Schlucke verteilt. ⚖️`);
 }
 
 // ─ ROUND 2 ──────────────────────────────────────────────
