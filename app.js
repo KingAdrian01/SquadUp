@@ -673,20 +673,22 @@ async function confirmSips() {
   isProcessing = true;
   try {
     const updates = {};
-    updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
-    updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
     
-    // Berechne die Anzahl der Bestätigungen basierend auf dem aktuellen Stand + mir
-    const currentlyConfirmed = Object.keys(lastGameState.confirmedDrinkers || {});
-    if (!currentlyConfirmed.includes(myId)) currentlyConfirmed.push(myId);
-
-    // Wir prüfen gegen die Anzahl der aktuell im Spiel befindlichen Spieler
+    // Berechne die Anzahl der bereits bestätigten Spieler
+    const confirmedObj = lastGameState.confirmedDrinkers || {};
+    const currentlyConfirmedCount = Object.keys(confirmedObj).length;
     const totalPlayers = Object.keys(lastGameState.players || {}).length;
 
-    if (currentlyConfirmed.length >= totalPlayers) {
+    // Schlucke für diesen Spieler auf 0 setzen
+    updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
+
+    // Wenn ich der Letzte bin, der bestätigt: Phase beenden und Liste leeren
+    if (currentlyConfirmedCount + 1 >= totalPlayers) {
       // Everyone confirmed -> Next Card or Phase
       updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
-      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = {};
+      // WICHTIG: Den gesamten Knoten auf null setzen, statt einzelne Kinder
+      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null;
+      
       const nextRoundCard = lastGameState.currentRoundCard + 1;
       if (nextRoundCard >= 4) {
         updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
@@ -694,7 +696,11 @@ async function confirmSips() {
         updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
         updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
       }
+    } else {
+      // Nur mich selbst als bestätigt markieren
+      updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
     }
+
     await update(ref(db), updates);
   } catch (e) {
     console.error(e);
