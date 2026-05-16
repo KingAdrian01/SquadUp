@@ -437,6 +437,15 @@ function renderRound1(gs, isMyTurn, currentPlayer, area) {
     }
   }
 
+  // Show currently drawn cards for the player whose turn it is
+  const hand = currentPlayer.hand || [];
+  if (hand.length > 0 && !gs.distributionActive && !gs.drinkingActive) {
+    html += `<div class="choice-section">
+      <div class="choice-title">Bisherige Karten von ${escHtml(currentPlayer.name)}</div>
+      <div class="cards-row">${hand.map(c => cardHTML(c)).join('')}</div>
+    </div>`;
+  }
+
   if (!gs.distributionActive && !gs.drinkingActive) {
     if (isMyTurn) {
       html += `<div class="choice-section">
@@ -501,89 +510,103 @@ function getChoiceButtons(step, drawn) {
 async function handleRound1Choice(choice, gs) {
   if (!fbReady || isProcessing) return;
   isProcessing = true;
-  const deckCopy = [...gs.deck];
-  const drawnCard = deckCopy.shift();
-  const player = gs.players[myId];
-  const hand = [...(player.hand || [])];
-  const step = gs.currentRoundCard;
-  let correct = false;
+  try {
+    const deckCopy = [...gs.deck];
+    const drawnCard = deckCopy.shift();
+    const player = gs.players[myId];
+    const hand = [...(player.hand || [])];
+    const step = gs.currentRoundCard;
+    let correct = false;
 
-  if (step === 0) {
-    correct = (choice === 'red') === isRed(drawnCard.suit);
-  } else if (step === 1) {
-    const prev = VALUE_ORDER[hand[0].value];
-    const cur = VALUE_ORDER[drawnCard.value];
-    if (choice === 'higher') correct = cur > prev;
-    else if (choice === 'lower') correct = cur < prev;
-    else correct = cur === prev;
-  } else if (step === 2) {
-    const vals = hand.map(c => VALUE_ORDER[c.value]);
-    const [lo, hi] = [Math.min(...vals), Math.max(...vals)];
-    const cur = VALUE_ORDER[drawnCard.value];
-    if (choice === 'inside') correct = cur > lo && cur < hi;
-    else correct = cur < lo || cur > hi;
-  } else if (step === 3) {
-    correct = choice === drawnCard.suit;
+    if (step === 0) {
+      correct = (choice === 'red') === isRed(drawnCard.suit);
+    } else if (step === 1) {
+      const prev = VALUE_ORDER[hand[0].value];
+      const cur = VALUE_ORDER[drawnCard.value];
+      if (choice === 'higher') correct = cur > prev;
+      else if (choice === 'lower') correct = cur < prev;
+      else correct = cur === prev;
+    } else if (step === 2) {
+      const vals = hand.map(c => VALUE_ORDER[c.value]);
+      const [lo, hi] = [Math.min(...vals), Math.max(...vals)];
+      const cur = VALUE_ORDER[drawnCard.value];
+      if (choice === 'inside') correct = cur > lo && cur < hi;
+      else correct = cur < lo || cur > hi;
+    } else if (step === 3) {
+      correct = choice === drawnCard.suit;
+    }
+
+    const sips = correct ? 0 : (step + 1);
+    const sipPoolBonus = correct ? (step + 1) : 0;
+    const newHand = [...hand, drawnCard];
+
+    const updates = {};
+    updates[`lobbies/${lobbyId}/game/deck`] = deckCopy;
+    updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = newHand;
+    
+    if (!correct) {
+      updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = (gs.players[myId].sipsToDrink || 0) + sips;
+      updates[`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`] = (gs.players[myId].sipsTotal || 0) + sips;
+      toast(`❌ Falsch! ${sips} Schluck${sips > 1 ? 'e' : ''} trinken 🍺`);
+    } else {
+      updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = (gs.players[myId].sipPool || 0) + sipPoolBonus;
+      toast('✅ Richtig!');
+    }
+
+    const nextPlayerIdx = gs.currentPlayerIndex + 1;
+    if (nextPlayerIdx >= gs.playerOrder.length) {
+      updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
+      updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = 0;
+      updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
+    } else {
+      updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextPlayerIdx;
+    }
+
+    await update(ref(db), updates);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    isProcessing = false;
   }
-
-  const sips = correct ? 0 : (step + 1);
-  const sipPoolBonus = correct ? (step + 1) : 0;
-  const newHand = [...hand, drawnCard];
-
-  // Update state
-  const updates = {};
-  updates[`lobbies/${lobbyId}/game/deck`] = deckCopy;
-  updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = newHand;
-  
-  if (!correct) {
-    updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = (gs.players[myId].sipsToDrink || 0) + sips;
-    updates[`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`] = (gs.players[myId].sipsTotal || 0) + sips;
-    toast(`❌ Falsch! ${sips} Schluck${sips > 1 ? 'e' : ''} trinken 🍺`);
-  } else {
-    updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = (gs.players[myId].sipPool || 0) + sipPoolBonus;
-    toast('✅ Richtig!');
-  }
-
-  const nextPlayerIdx = gs.currentPlayerIndex + 1;
-  if (nextPlayerIdx >= gs.playerOrder.length) {
-    // All players have drawn this card, go to distribution
-    updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
-    updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = 0;
-    updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
-  } else {
-    updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextPlayerIdx;
-  }
-
-  await update(ref(db), updates);
-  isProcessing = false;
 }
 
 async function distributeSips(targetId, amount, gs) {
   if (isProcessing) return;
   isProcessing = true;
-  const updates = {};
-  const giver = gs.players[myId];
-  const newPool = (giver.sipPool || 0) - amount;
-  
-  updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = newPool;
-  updates[`lobbies/${lobbyId}/game/players/${targetId}/sipsToDrink`] = (gs.players[targetId].sipsToDrink || 0) + amount;
-  updates[`lobbies/${lobbyId}/game/players/${targetId}/sipsTotal`] = (gs.players[targetId].sipsTotal || 0) + amount;
+  try {
+    const updates = {};
+    const giver = gs.players[myId];
+    const newPool = (giver.sipPool || 0) - amount;
+    
+    updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = newPool;
+    updates[`lobbies/${lobbyId}/game/players/${targetId}/sipsToDrink`] = (gs.players[targetId].sipsToDrink || 0) + amount;
+    updates[`lobbies/${lobbyId}/game/players/${targetId}/sipsTotal`] = (gs.players[targetId].sipsTotal || 0) + amount;
 
-  if (newPool <= 0) {
-    await checkNextDistributor(gs, updates);
-  } else {
-    await update(ref(db), updates);
+    if (newPool <= 0) {
+      await checkNextDistributor(gs, updates);
+    } else {
+      await update(ref(db), updates);
+    }
+    toast(`${amount} Schlucke an ${gs.players[targetId].name} verteilt!`);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    isProcessing = false;
   }
-  isProcessing = false;
 }
 
 async function skipDistribution() {
   if (isProcessing) return;
   isProcessing = true;
-  const updates = {};
-  updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = 0;
-  await checkNextDistributor(lastGameState, updates);
-  isProcessing = false;
+  try {
+    const updates = {};
+    updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = 0;
+    await checkNextDistributor(lastGameState, updates);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    isProcessing = false;
+  }
 }
 
 async function checkNextDistributor(gs, updates) {
@@ -608,24 +631,30 @@ async function checkNextDistributor(gs, updates) {
 async function confirmSips() {
   if (!lastGameState || isProcessing) return;
   isProcessing = true;
-  const updates = {};
-  updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
-  updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
-  
-  const confirmedCount = Object.keys(lastGameState.confirmedDrinkers || {}).length + 1;
-  if (confirmedCount >= lastGameState.playerOrder.length) {
-    // Everyone confirmed -> Next Card or Phase
-    updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
-    const nextRoundCard = lastGameState.currentRoundCard + 1;
-    if (nextRoundCard >= 4) {
-      updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
-    } else {
-      updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
-      updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
+  try {
+    const updates = {};
+    updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
+    updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
+    
+    const confirmedCount = Object.keys(lastGameState.confirmedDrinkers || {}).length + 1;
+    if (confirmedCount >= lastGameState.playerOrder.length) {
+      // Everyone confirmed -> Next Card or Phase
+      updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
+      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = {};
+      const nextRoundCard = lastGameState.currentRoundCard + 1;
+      if (nextRoundCard >= 4) {
+        updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
+      } else {
+        updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
+        updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
+      }
     }
+    await update(ref(db), updates);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    isProcessing = false;
   }
-  await update(ref(db), updates);
-  isProcessing = false;
 }
 
 function manageDrinkingPopup(gs) {
