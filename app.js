@@ -783,11 +783,7 @@ function renderRound2(gs, area) {
       }
     }
   } else {
-    // All revealed – determine busfahrer
-    if (isHost && !gs.busfahrerId) {
-      determineBusfahrer(gs);
-    }
-    html += `<div class="info-box">Alle Karten aufgedeckt! <strong>Busfahrer wird ermittelt...</strong></div>`;
+    html += `<div class="info-box">Alle Karten aufgedeckt!</div>`;
   }
 
   // All players hands
@@ -809,7 +805,11 @@ function buildPyramidRows(size) {
 
 async function revealPyramidCard(gs) {
   const pidx = gs.pyramidIndex;
-  if (pidx >= gs.pyramid.length || isProcessing) return;
+  if (pidx >= gs.pyramid.length || isProcessing || !isHost) return;
+  
+  isProcessing = true;
+  const updates = {};
+
   const pyramid = [...gs.pyramid];
   const card = pyramid[pidx];
   card.revealed = true;
@@ -844,14 +844,14 @@ async function revealPyramidCard(gs) {
     rowIndex++;
   }
 
-  const updates = {};
   updates[`lobbies/${lobbyId}/game/pyramid`] = pyramid;
   updates[`lobbies/${lobbyId}/game/pyramidIndex`] = pidx + 1;
 
   // Remove matched cards from player hands
   const sipsAdd = {};
   for (const pid of gs.playerOrder) {
-    let hand = [...(gs.players[pid].hand || [])];
+    const p = gs.players[pid];
+    let hand = [...(p.hand || [])];
     const rows2 = buildPyramidRows(gs.pyramidSize);
     let ri = 0, fi2 = 0;
     let sipsForMatch = 1;
@@ -873,57 +873,55 @@ async function revealPyramidCard(gs) {
     }
   }
 
+  // Wenn das die letzte Karte war -> Busfahrer direkt hier ermitteln
   if (pidx + 1 >= gs.pyramid.length) {
-    // Move to determine busfahrer (will be done in render)
-  }
-
-  await update(ref(db), updates);
-}
-
-async function determineBusfahrer(gs) {
-  // Player with most cards. Tiebreak: lowest card value
-  const players = gs.playerOrder.map(pid => ({
-    pid,
-    hand: gs.players[pid].hand || [],
-    name: gs.players[pid].name
-  }));
-
-  if (gs.phase !== 'round2') return; // Double gate
-  const maxCards = Math.max(...players.map(p => p.hand.length));
-  if (maxCards === 0) {
-    // No cards left – use sips
-    const loser = players.reduce((a, b) => (b.sipsTotal || 0) > (a.sipsTotal || 0) ? b : a);
-    await update(ref(db), {
-      [`lobbies/${lobbyId}/game/busfahrerId`]: loser.pid,
-      [`lobbies/${lobbyId}/game/phase`]: 'round3',
-      [`lobbies/${lobbyId}/game/busStep`]: 0,
-      [`lobbies/${lobbyId}/game/busCards`]: [],
-      [`lobbies/${lobbyId}/game/busRestarts`]: 0,
+    const playerResults = gs.playerOrder.map(pid => {
+      // Wir müssen die aktuelle Hand benutzen (nachdem Treffer entfernt wurden!)
+      const currentHand = updates[`lobbies/${lobbyId}/game/players/${pid}/hand`] || gs.players[pid].hand || [];
+      return {
+        pid,
+        hand: currentHand,
+        sipsTotal: updates[`lobbies/${lobbyId}/game/players/${pid}/sipsTotal`] || gs.players[pid].sipsTotal || 0,
+        name: gs.players[pid].name
+      };
     });
-    return;
+
+    const maxCards = Math.max(...playerResults.map(p => p.hand.length));
+    let busfahrerId;
+
+    if (maxCards === 0) {
+      // Keiner hat mehr Karten -> Wer am meisten getrunken hat verliert
+      busfahrerId = playerResults.reduce((a, b) => b.sipsTotal > a.sipsTotal ? b : a).pid;
+    } else {
+      const candidates = playerResults.filter(p => p.hand.length === maxCards);
+      if (candidates.length === 1) {
+        busfahrerId = candidates[0].pid;
+      } else {
+        // Tiebreak: Niedrigste Karte auf der Hand
+        busfahrerId = candidates.reduce((a, b) => {
+          const aMin = Math.min(...a.hand.map(c => VALUE_ORDER[c.value]));
+          const bMin = Math.min(...b.hand.map(c => VALUE_ORDER[c.value]));
+          return bMin < aMin ? b : a;
+        }).pid;
+      }
+    }
+
+    updates[`lobbies/${lobbyId}/game/busfahrerId`] = busfahrerId;
+    updates[`lobbies/${lobbyId}/game/phase`] = 'round3';
+    updates[`lobbies/${lobbyId}/game/busStep`] = 0;
+    updates[`lobbies/${lobbyId}/game/busCards`] = [];
+    updates[`lobbies/${lobbyId}/game/busRestarts`] = 0;
+    
+    toast(`🚌 ${gs.players[busfahrerId].name} ist der Busfahrer!`, 5000);
   }
 
-  const candidates = players.filter(p => p.hand.length === maxCards);
-  let busfahrer;
-  if (candidates.length === 1) {
-    busfahrer = candidates[0];
-  } else {
-    // Tiebreak: lowest card
-    busfahrer = candidates.reduce((a, b) => {
-      const aMin = Math.min(...a.hand.map(c => VALUE_ORDER[c.value]));
-      const bMin = Math.min(...b.hand.map(c => VALUE_ORDER[c.value]));
-      return bMin < aMin ? b : a;
-    });
+  try {
+    await update(ref(db), updates);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    isProcessing = false;
   }
-
-  toast(`🚌 ${busfahrer.name} ist der Busfahrer!`, 4000);
-  await update(ref(db), {
-    [`lobbies/${lobbyId}/game/busfahrerId`]: busfahrer.pid,
-    [`lobbies/${lobbyId}/game/phase`]: 'round3',
-    [`lobbies/${lobbyId}/game/busStep`]: 0,
-    [`lobbies/${lobbyId}/game/busCards`]: [],
-    [`lobbies/${lobbyId}/game/busRestarts`]: 0,
-  });
 }
 
 // ─ ROUND 3 (Busfahrer) ──────────────────────────────────
