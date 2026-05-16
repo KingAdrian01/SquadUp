@@ -462,6 +462,13 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   border: 2px solid var(--red) !important;
   pointer-events: none;
 }
+.card.matched {
+  border-color: var(--green) !important;
+  opacity: 0.4;
+  filter: grayscale(0.5);
+  pointer-events: none;
+  transform: scale(0.9);
+}
 .card.face-down {
   cursor: pointer;
 }

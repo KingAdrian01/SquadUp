@@ -81,10 +81,11 @@ function toast(msg, duration = 2800) {
 }
 
 // ── Card HTML ──────────────────────────────────────────────
-function cardHTML(card, small = false, extra = '') {
-  if (!card) return `<div class="card${small ? '-sm' : ''} face-down"></div>`;
+function cardHTML(card, small = false, extra = '', idx = null) {
+  const dataIdx = idx !== null ? `data-idx="${idx}"` : '';
+  if (!card) return `<div class="card${small ? '-sm' : ''} face-down" ${dataIdx}></div>`;
   const cls = `${small ? 'card-sm' : 'card'} ${cardColor(card.suit)} ${extra}`;
-  return `<div class="${cls}">
+  return `<div class="${cls}" ${dataIdx}>
     <span class="card-value">${card.value}</span>
     <span class="card-suit">${card.suit}</span>
   </div>`;
@@ -734,6 +735,16 @@ function manageDrinkingPopup(gs) {
   }
 }
 
+// Hilfsfunktion zum Attachen der Handkarten-Listener
+function attachHandCardListeners(gs) {
+  document.querySelectorAll('.hand-card').forEach(el => {
+    el.onclick = () => {
+      const idx = parseInt(el.dataset.idx);
+      if (!isNaN(idx)) matchHandCard(idx, gs);
+    };
+  });
+}
+
 // ─ ROUND 2 ──────────────────────────────────────────────
 function renderRound2(gs, area) {
   const pyramid = gs.pyramid;
@@ -752,6 +763,7 @@ function renderRound2(gs, area) {
         <button class="btn btn-primary btn-large" onclick="readyUpRound2()">Karten umdrehen & bereit</button>
       </div>
       ${renderAllHands(gs)}`;
+    attachHandCardListeners(gs);
     return;
   }
 
@@ -848,6 +860,7 @@ function renderRound2(gs, area) {
   html += renderAllHands(gs);
 
   area.innerHTML = html;
+  attachHandCardListeners(gs);
 
   if (isHost) {
     const revBtn = document.getElementById('btn-reveal-pyramid');
@@ -888,20 +901,22 @@ async function readyUpRound2() {
 }
 
 async function matchHandCard(cardIdx, gs) {
-  if (isProcessing || gs.distributionActive || gs.drinkingActive) return;
+  if (gs.phase !== 'round2' || isProcessing || gs.distributionActive || gs.drinkingActive) return;
   const pidx = gs.pyramidIndex - 1;
   if (pidx < 0) return;
   
   const pyramidCard = gs.pyramid[pidx];
+  if (!pyramidCard.revealed) return; // Nur matchen wenn Karte offen ist
+
   const hand = [...(gs.players[myId].hand || [])];
   const card = hand[cardIdx];
   
-  if (card.locked || card.matched) return;
+  if (!card || card.locked || card.matched) return;
 
   isProcessing = true;
   const updates = {};
   
-  if (card.value === pyramidCard.value) {
+  if (card.value === pyramidCard.value || (card.value === '10' && pyramidCard.value === '10')) {
     toast("✅ Treffer! Du darfst verteilen.");
     card.matched = true;
     const sips = getSipsForRow(pidx, gs.pyramidSize);
@@ -1180,11 +1195,21 @@ function renderAllHands(gs) {
     html += `<div class="player-hand-row">
       <div class="player-hand-name">${escHtml(p.name)}${isMe ? ' 👤' : ''}</div>
       <div class="player-hand-cards">
-        ${hand.length === 0
-          ? `<span style="font-size:13px;color:var(--text-dim)">keine</span>`
-          : hand.map(c => cardHTML(c, true)).join('')}
-      </div>
-      <div class="player-sip-status">
+        ${
+          hand.length === 0
+            ? `<span style="font-size:13px;color:var(--text-dim)">keine</span>`
+            : hand
+                .map((c, idx) => {
+                  const isFaceDown = gs.phase === 'round2' && p.readyForRound2;
+                  let extra = 'hand-card';
+                  if (c.matched) extra += ' matched';
+                  if (c.locked) extra += ' locked';
+                  const displayCard = isFaceDown && !c.matched && !c.locked ? null : c;
+                  return cardHTML(displayCard, true, extra, idx);
+                })
+                .join('')
+        }
+      </div><div class="player-sip-status">
         ${toDrink > 0 ? `<div class="sip-count-badge">🍺 ${toDrink}</div>` : ''}
         <div style="font-size:12px;color:var(--text-dim);margin-left:8px">Gesamt: ${total}</div>
       </div>
