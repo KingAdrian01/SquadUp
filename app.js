@@ -312,6 +312,7 @@ async function startGame() {
       name: p.name,
       hand: [], // Start empty, filled during R1
       drawnCards: [],
+      readyForRound2: false,
       sipPool: 0, // Schlucke, die man verteilen darf
       sipsToDrink: 0,
       sipsTotal: 0
@@ -334,6 +335,7 @@ async function startGame() {
     playerOrder: players.map(p => p.id),
     currentPlayerIndex: 0,
     currentRoundCard: 0, // 0 bis 3 (für die 4 Karten)
+    matchingActive: false,
     drawnForCurrentPlayer: [],
     round1Done: false,
     pyramidIndex: 0,
@@ -370,6 +372,14 @@ function renderGame(gs) {
   const phaseBadge = document.getElementById('phase-badge');
   const cpBadge = document.getElementById('current-player-badge');
   const progress = document.getElementById('round-progress');
+
+  // Check if everyone is ready for Round 2
+  if (gs.phase === 'round2' && !gs.matchingActive && !gs.distributionActive && !gs.drinkingActive) {
+    const allReady = gs.playerOrder.every(pid => gs.players[pid].readyForRound2);
+    if (allReady && isHost && gs.pyramidIndex === 0) {
+      // Auto-start first card reveal possible
+    }
+  }
 
   // Handle drinking popup
   manageDrinkingPopup(gs);
@@ -730,6 +740,24 @@ function renderRound2(gs, area) {
   const size = gs.pyramidSize;
   const pidx = gs.pyramidIndex;
 
+  // Step 1: Prep phase - players must flip cards
+  if (!gs.players[myId].readyForRound2) {
+    area.innerHTML = `
+      <div class="choice-section">
+        <div class="choice-title">Runde 2: Vorbereitung</div>
+        <div class="choice-question">Präge dir deine Karten gut ein!</div>
+        <div class="cards-row" style="margin-bottom: 20px">
+          ${(gs.players[myId].hand || []).map(c => cardHTML(c)).join('')}
+        </div>
+        <button class="btn btn-primary btn-large" onclick="readyUpRound2()">Karten umdrehen & bereit</button>
+      </div>
+      ${renderAllHands(gs)}`;
+    return;
+  }
+
+  const allReady = gs.playerOrder.every(pid => gs.players[pid].readyForRound2);
+  const giverId = gs.playerOrder[gs.distributionGiverIndex];
+
   // Build pyramid rows: 6 cards = rows of 3,2,1; 10 cards = rows of 4,3,2,1
   const rows = buildPyramidRows(size);
   let flatIdx = 0;
@@ -764,10 +792,33 @@ function renderRound2(gs, area) {
   }
   html += `</div></div>`;
 
+  // Distribution phase (same as R1)
+  if (gs.distributionActive) {
+    if (giverId === myId) {
+      const pool = gs.players[myId].sipPool || 0;
+      html += `<div class="choice-section highlight-border">
+        <div class="choice-title">Schlucke verteilen! 🍺</div>
+        <div class="choice-question">Reihe ${getSipsForRow(pidx-1, size)}: Du hast ${pool} Schlucke</div>
+        <div class="distribute-ui">
+          <select id="distribute-amount" class="sip-select">
+            ${Array.from({length: pool}, (_, i) => `<option value="${i+1}">${i+1}</option>`).join('')}
+          </select>
+          <div class="distribute-grid">
+            ${gs.playerOrder.filter(id => id !== myId).map(id => `
+              <button class="btn btn-secondary distribute-btn" data-target="${id}">${escHtml(gs.players[id].name)}</button>
+            `).join('')}
+          </div>
+        </div>
+      </div>`;
+    } else {
+      html += `<div class="info-box"><strong>${escHtml(gs.players[giverId].name)}</strong> verteilt gerade Schlucke...</div>`;
+    }
+  }
+
   // Current card reveal
-  if (pidx < pyramid.length) {
+  if (pidx < pyramid.length && !gs.distributionActive && !gs.drinkingActive) {
     const currentCard = pyramid[pidx];
-    if (!currentCard.revealed) {
+    if (!currentCard.revealed && allReady) {
       if (isHost) {
         html += `<div class="choice-section">
           <div class="choice-title">Nächste Pyramidenkarte aufdecken</div>
@@ -781,6 +832,13 @@ function renderRound2(gs, area) {
       } else {
         html += `<div class="info-box">Warte auf den Host...<br><div class="loading-dots" style="margin-top:8px"><span></span><span></span><span></span></div></div>`;
       }
+    } else if (currentCard.revealed) {
+      html += `<div class="info-box highlight-border">Karte aufgedeckt! Tippe auf eine deiner Karten, wenn du den Wert <strong>${currentCard.value}</strong> hast.</div>`;
+      if (isHost) {
+        html += `<button class="btn btn-secondary btn-large" style="margin-top:10px" onclick="startPyramidDistribution()">Fertig (Verteilen starten) ➔</button>`;
+      }
+    } else {
+      html += `<div class="info-box">Warte auf andere Spieler...</div>`;
     }
   } else {
     html += `<div class="info-box">Alle Karten aufgedeckt!</div>`;
@@ -795,12 +853,72 @@ function renderRound2(gs, area) {
     const revBtn = document.getElementById('btn-reveal-pyramid');
     if (revBtn) revBtn.addEventListener('click', () => revealPyramidCard(gs));
   }
+
+  if (giverId === myId && gs.distributionActive) {
+    area.querySelectorAll('.distribute-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const amt = parseInt(document.getElementById('distribute-amount').value);
+        distributeSips(btn.dataset.target, amt, gs);
+      });
+    });
+  }
 }
 
 function buildPyramidRows(size) {
   if (size === 6) return [3, 2, 1];
   if (size === 10) return [4, 3, 2, 1];
   return [3, 2, 1];
+}
+
+function getSipsForRow(pidx, size) {
+  const rows = buildPyramidRows(size);
+  let count = 0;
+  for (let r = 0; r < rows.length; r++) {
+    count += rows[r];
+    if (pidx < count) return r + 1;
+  }
+  return 1;
+}
+
+async function readyUpRound2() {
+  if (isProcessing) return;
+  isProcessing = true;
+  await update(ref(db, `lobbies/${lobbyId}/game/players/${myId}`), { readyForRound2: true });
+  isProcessing = false;
+}
+
+async function matchHandCard(cardIdx, gs) {
+  if (isProcessing || gs.distributionActive || gs.drinkingActive) return;
+  const pidx = gs.pyramidIndex - 1;
+  if (pidx < 0) return;
+  
+  const pyramidCard = gs.pyramid[pidx];
+  const hand = [...(gs.players[myId].hand || [])];
+  const card = hand[cardIdx];
+  
+  if (card.locked || card.matched) return;
+
+  isProcessing = true;
+  const updates = {};
+  
+  if (card.value === pyramidCard.value) {
+    toast("✅ Treffer! Du darfst verteilen.");
+    card.matched = true;
+    const sips = getSipsForRow(pidx, gs.pyramidSize);
+    updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = (gs.players[myId].sipPool || 0) + sips;
+  } else {
+    toast("❌ Falsch! Karte gesperrt.");
+    card.locked = true;
+  }
+  
+  updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = hand;
+  await update(ref(db), updates);
+  isProcessing = false;
+}
+
+async function startPyramidDistribution() {
+  const updates = {};
+  await checkNextDistributor(lastGameState, updates);
 }
 
 async function revealPyramidCard(gs) {
@@ -815,63 +933,8 @@ async function revealPyramidCard(gs) {
   card.revealed = true;
   pyramid[pidx] = card;
 
-  // Check matches
-  const rows = buildPyramidRows(gs.pyramidSize);
-  let rowIndex = 0, fi = 0;
-  for (const rs of rows) {
-    for (let i = 0; i < rs; i++) {
-      if (fi === pidx) {
-        // row rowIndex → sips = rowIndex + 1
-        const sips = rowIndex + 1;
-        const matchPlayers = [];
-        for (const pid of gs.playerOrder) {
-          const phand = gs.players[pid].hand || [];
-          const matches = phand.filter(hc => hc.value === card.value);
-          if (matches.length > 0) matchPlayers.push({ pid, sips, matches, pname: gs.players[pid].name });
-        }
-        // Show toast
-        if (matchPlayers.length > 0) {
-          const names = matchPlayers.map(m => m.pname).join(', ');
-          toast(`${card.value}${card.suit} – ${names} trinkt ${sips} Schluck${sips > 1 ? 'e' : ''} 🍺`, 4000);
-        } else {
-          toast(`${card.value}${card.suit} – Keine Übereinstimmung`);
-        }
-        break;
-      }
-      fi++;
-    }
-    if (fi > pidx) break;
-    rowIndex++;
-  }
-
   updates[`lobbies/${lobbyId}/game/pyramid`] = pyramid;
   updates[`lobbies/${lobbyId}/game/pyramidIndex`] = pidx + 1;
-
-  // Remove matched cards from player hands
-  const sipsAdd = {};
-  for (const pid of gs.playerOrder) {
-    const p = gs.players[pid];
-    let hand = [...(p.hand || [])];
-    const rows2 = buildPyramidRows(gs.pyramidSize);
-    let ri = 0, fi2 = 0;
-    let sipsForMatch = 1;
-    for (const rs of rows2) {
-      for (let i = 0; i < rs; i++) {
-        if (fi2 === pidx) { sipsForMatch = ri + 1; break; }
-        fi2++;
-      }
-      if (fi2 > pidx) break;
-      ri++;
-    }
-    const before = hand.length;
-    hand = hand.filter(hc => hc.value !== card.value);
-    const removed = before - hand.length;
-    if (removed > 0) {
-      sipsAdd[pid] = (gs.players[pid].sipsTotal || 0) + sipsForMatch * removed;
-      updates[`lobbies/${lobbyId}/game/players/${pid}/hand`] = hand;
-      updates[`lobbies/${lobbyId}/game/players/${pid}/sipsTotal`] = sipsAdd[pid];
-    }
-  }
 
   // Wenn das die letzte Karte war -> Busfahrer direkt hier ermitteln
   if (pidx + 1 >= gs.pyramid.length) {
