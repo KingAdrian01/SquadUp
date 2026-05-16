@@ -58,6 +58,7 @@ let myId = 'u_' + Math.random().toString(36).slice(2, 9);
 let lobbyId = null;
 let isHost = false;
 let unsubFns = [];
+let isProcessing = false; // Prevents double-clicks
 let pyramidSize = 6;
 
 // ── Screens ──────────────────────────────────────────────
@@ -304,8 +305,9 @@ async function startGame() {
     playerStates[p.id] = {
       id: p.id,
       name: p.name,
-      hand: [deck[di++], deck[di++], deck[di++], deck[di++]],
+      hand: [], // Start empty, filled during R1
       drawnCards: [],
+      sipsToDrink: 0,
       sipsTotal: 0
     };
   }
@@ -329,6 +331,8 @@ async function startGame() {
     drawnForCurrentPlayer: [],
     round1Done: false,
     pyramidIndex: 0,
+    distributeCount: 0,
+    distributeGiver: null,
     busfahrerId: null,
     busStep: 0,
     busCards: [],
@@ -395,6 +399,23 @@ function renderRound1(gs, isMyTurn, currentPlayer, area) {
 
   let html = '';
 
+  // Distribution phase
+  if (gs.distributeCount > 0) {
+    if (gs.distributeGiver === myId) {
+      html += `<div class="choice-section highlight-border">
+        <div class="choice-title">Schlucke verteilen! 🍺</div>
+        <div class="choice-question">Wähle jemanden, der ${gs.distributeCount} Schlucke bekommt:</div>
+        <div class="distribute-grid">
+          ${gs.playerOrder.filter(id => id !== myId).map(id => `
+            <button class="btn btn-secondary distribute-btn" data-target="${id}">${escHtml(gs.players[id].name)}</button>
+          `).join('')}
+        </div>
+      </div>`;
+    } else {
+      html += `<div class="info-box"><strong>${escHtml(gs.players[gs.distributeGiver].name)}</strong> verteilt gerade Schlucke...</div>`;
+    }
+  }
+
   // Show drawn cards so far
   if (drawn.length > 0) {
     html += `<div class="choice-section">
@@ -405,7 +426,7 @@ function renderRound1(gs, isMyTurn, currentPlayer, area) {
     </div>`;
   }
 
-  if (step < 4) {
+  if (step < 4 && !gs.distributeCount) {
     if (isMyTurn) {
       html += `<div class="choice-section">
         <div class="choice-title">Karte ${step + 1} von 4</div>
@@ -431,6 +452,11 @@ function renderRound1(gs, isMyTurn, currentPlayer, area) {
   if (isMyTurn && step < 4) {
     area.querySelectorAll('.choice-btn').forEach(btn => {
       btn.addEventListener('click', () => handleRound1Choice(btn.dataset.choice, gs));
+    });
+  }
+  if (isMyTurn && gs.distributeCount > 0) {
+    area.querySelectorAll('.distribute-btn').forEach(btn => {
+      btn.addEventListener('click', () => distributeSips(btn.dataset.target, gs));
     });
   }
 }
@@ -460,7 +486,8 @@ function getChoiceButtons(step, drawn) {
 }
 
 async function handleRound1Choice(choice, gs) {
-  if (!fbReady) return;
+  if (!fbReady || isProcessing) return;
+  isProcessing = true;
   // Draw next card from deck
   const deckCopy = [...gs.deck];
   const drawnCard = deckCopy.shift();
@@ -487,41 +514,63 @@ async function handleRound1Choice(choice, gs) {
   }
 
   const sips = correct ? 0 : (step + 1);
+  const distributeSipsCount = correct ? (step + 1) : 0;
   const newDrawn = [...drawn, drawnCard];
 
   // Update state
   const updates = {};
   updates[`lobbies/${lobbyId}/game/deck`] = deckCopy;
   updates[`lobbies/${lobbyId}/game/drawnForCurrentPlayer`] = newDrawn;
-  updates[`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`] = (gs.players[myId].sipsTotal || 0) + sips;
+  
+  if (!correct) {
+    updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = (gs.players[myId].sipsToDrink || 0) + sips;
+    updates[`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`] = (gs.players[myId].sipsTotal || 0) + sips;
+    toast(`❌ Falsch! ${sips} Schluck${sips > 1 ? 'e' : ''} trinken 🍺`);
+  } else {
+    updates[`lobbies/${lobbyId}/game/distributeCount`] = distributeSipsCount;
+    updates[`lobbies/${lobbyId}/game/distributeGiver`] = myId;
+    toast('✅ Richtig!');
+  }
 
   if (step < 3) {
     updates[`lobbies/${lobbyId}/game/currentCardStep`] = step + 1;
-    await update(ref(db), updates);
-    if (!correct) toast(`❌ Falsch! ${sips} Schluck${sips > 1 ? 'e' : ''} trinken 🍺`);
-    else toast('✅ Richtig!');
   } else {
-    // Done with 4 cards – give them to the player
-    const hand = newDrawn;
-    updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = hand;
-
+    updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = newDrawn;
     const nextIndex = gs.currentPlayerIndex + 1;
     if (nextIndex >= gs.playerOrder.length) {
-      // All done – go to round 2
-      updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
-      updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
-      updates[`lobbies/${lobbyId}/game/currentCardStep`] = 0;
-      updates[`lobbies/${lobbyId}/game/drawnForCurrentPlayer`] = [];
-      updates[`lobbies/${lobbyId}/game/pyramidIndex`] = 0;
+      updates[`lobbies/${lobbyId}/game/round1Done`] = true;
     } else {
       updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextIndex;
       updates[`lobbies/${lobbyId}/game/currentCardStep`] = 0;
       updates[`lobbies/${lobbyId}/game/drawnForCurrentPlayer`] = [];
     }
-    await update(ref(db), updates);
-    if (!correct) toast(`❌ Falsch! ${sips} Schlucke trinken 🍺`);
-    else toast('✅ Richtig! Alle 4 Karten gezogen.');
   }
+  await update(ref(db), updates);
+  isProcessing = false;
+}
+
+async function distributeSips(targetId, gs) {
+  if (isProcessing) return;
+  isProcessing = true;
+  const count = gs.distributeCount;
+  const updates = {};
+  updates[`lobbies/${lobbyId}/game/players/${targetId}/sipsToDrink`] = (gs.players[targetId].sipsToDrink || 0) + count;
+  updates[`lobbies/${lobbyId}/game/distributeCount`] = 0;
+  updates[`lobbies/${lobbyId}/game/distributeGiver`] = null;
+  
+  // If round 1 was actually finished for this player, move phase or player
+  if (gs.round1Done && gs.distributeCount > 0) {
+    updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
+    updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
+    updates[`lobbies/${lobbyId}/game/currentCardStep`] = 0;
+    updates[`lobbies/${lobbyId}/game/drawnForCurrentPlayer`] = [];
+    updates[`lobbies/${lobbyId}/game/pyramidIndex`] = 0;
+    updates[`lobbies/${lobbyId}/game/round1Done`] = false;
+  }
+
+  await update(ref(db), updates);
+  isProcessing = false;
+  toast(`Gerechtigkeit! ${count} Schlucke verteilt. ⚖️`);
 }
 
 // ─ ROUND 2 ──────────────────────────────────────────────
@@ -609,6 +658,7 @@ function buildPyramidRows(size) {
 
 async function revealPyramidCard(gs) {
   const pidx = gs.pyramidIndex;
+  if (pidx >= gs.pyramid.length || isProcessing) return;
   const pyramid = [...gs.pyramid];
   const card = pyramid[pidx];
   card.revealed = true;
@@ -687,6 +737,7 @@ async function determineBusfahrer(gs) {
     name: gs.players[pid].name
   }));
 
+  if (gs.phase !== 'round2') return; // Double gate
   const maxCards = Math.max(...players.map(p => p.hand.length));
   if (maxCards === 0) {
     // No cards left – use sips
@@ -790,6 +841,8 @@ function getBusChoiceButtons(step, drawn) {
 }
 
 async function handleBusChoice(choice, gs) {
+  if (isProcessing) return;
+  isProcessing = true;
   const busCards = [...(gs.busCards || [])];
   const deckCopy = [...gs.deck];
   const drawnCard = deckCopy.shift();
@@ -843,9 +896,11 @@ async function handleBusChoice(choice, gs) {
       [`lobbies/${lobbyId}/game/busCards`]: [],
       [`lobbies/${lobbyId}/game/busStep`]: 0,
       [`lobbies/${lobbyId}/game/busRestarts`]: (gs.busRestarts || 0) + 1,
+      [`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`]: (gs.players[myId]?.sipsToDrink || 0) + sips,
       [`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`]: (gs.players[myId]?.sipsTotal || 0) + sips,
     });
   }
+  isProcessing = false;
 }
 
 // ─ END SCREEN ──────────────────────────────────────────────
@@ -897,18 +952,30 @@ function renderEnd(gs, area) {
 
 // ─ HELPERS ─────────────────────────────────────────────────
 function renderAllHands(gs) {
+  // Hide hands in Round 1 until someone actually has a hand
+  const handsStarted = Object.values(gs.players).some(p => p.hand && p.hand.length > 0);
+  if (!handsStarted && gs.phase === 'round1') return '';
+
   let html = `<div class="players-hands">
     <div class="section-title">Karten auf der Hand</div>`;
   for (const pid of gs.playerOrder) {
     const p = gs.players[pid];
     const hand = p.hand || [];
     const isMe = pid === myId;
+    const toDrink = p.sipsToDrink || 0;
+
     html += `<div class="player-hand-row">
       <div class="player-hand-name">${escHtml(p.name)}${isMe ? ' 👤' : ''}</div>
       <div class="player-hand-cards">
         ${hand.length === 0
           ? `<span style="font-size:13px;color:var(--text-dim)">keine</span>`
           : hand.map(c => cardHTML(c, true)).join('')}
+      </div>
+      <div class="player-sip-status">
+        ${toDrink > 0 ? `
+          <div class="sip-count-badge">🍺 ${toDrink}</div>
+          ${isMe ? `<button class="btn-confirm-sip" onclick="confirmSips()">✅</button>` : ''}
+        ` : ''}
       </div>
     </div>`;
   }

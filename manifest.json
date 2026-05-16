@@ -1,7 +1,7 @@
 {
-  "name": "Busfahrer",
-  "short_name": "Busfahrer",
-  "description": "Das Trinkkartenspiel Busfahrer – spiel mit Freunden!",
+  "name": "SquadUp",
+  "short_name": "SquadUp",
+  "description": "Das Trinkkartenspiel SquadUp – spiel mit Freunden!",
   "start_url": "/index.html",
   "display": "standalone",
   "orientation": "portrait",
