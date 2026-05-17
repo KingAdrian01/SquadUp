@@ -142,6 +142,10 @@ function setupHomeUI() {
   document.getElementById('input-name').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('input-code').focus();
   });
+
+  // Globaler Listener für den Trink-Bestätigungs-Button
+  const confirmBtn = document.getElementById('btn-confirm-drinking');
+  if (confirmBtn) confirmBtn.addEventListener('click', confirmSips);
 }
 
 // ── CREATE LOBBY ──────────────────────────────────────────
@@ -1656,3 +1660,14 @@ function escHtml(str) {
 
 // ─ Pyramid size sync for non-host ──────────────────────────
 // Already handled in enterLobbyScreen
+
+// Da app.js ein Modul ist, müssen Funktionen, die in HTML-Strings via onclick 
+// aufgerufen werden, explizit an das window-Objekt gebunden werden.
+window.confirmSips = confirmSips;
+window.skipDistribution = skipDistribution;
+window.readyUpRound2 = readyUpRound2;
+window.startPyramidDistribution = startPyramidDistribution;
+window.revealPyramidCard = revealPyramidCard;
+window.revealTiebreakerCard = revealTiebreakerCard;
+window.requestBusTakeOver = requestBusTakeOver;
+window.respondToBusTakeOver = respondToBusTakeOver;
