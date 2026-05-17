@@ -1,4 +1,5 @@
 import { injectSpeedInsights } from '@vercel/speed-insights';
+import { inject } from '@vercel/analytics';
 
 // ===================================================
 //  BUSFAHRER – app.js
@@ -114,6 +115,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Startet die Home-Oberfläche
     setupHomeUI();
     injectSpeedInsights(); // Speed Insights hier initialisieren
+    inject(); // Web Analytics hier initialisieren
     console.log("Firebase automatisch verbunden! 🔥");
   } catch (e) {
     console.error("Firebase Fehler:", e);
