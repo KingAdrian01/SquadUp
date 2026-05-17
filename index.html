@@ -13,6 +13,14 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <!-- Import Map für Browser-Module -->
+  <script type="importmap">
+    {
+      "imports": {
+        "@vercel/speed-insights": "https://unpkg.com/@vercel/speed-insights@latest/dist/index.mjs"
+      }
+    }
+  </script>
   <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
@@ -108,7 +116,7 @@
   </div>
 
   <!-- ===== FIREBASE CONFIG MODAL ===== -->
-  <div id="firebase-modal" class="modal-overlay active">
+  <div id="firebase-modal" class="modal-overlay">
     <div class="modal-box">
       <h2 class="modal-title">🔥 Firebase Setup</h2>
       <p class="modal-desc">
