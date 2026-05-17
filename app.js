@@ -1,3 +1,5 @@
+import { injectSpeedInsights } from '@vercel/speed-insights';
+
 // ===================================================
 //  BUSFAHRER – app.js
 //  Full multiplayer via Firebase Realtime Database
@@ -10,6 +12,7 @@ const VALUES = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
 const VALUE_ORDER = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14 };
 
 function isRed(suit) { return suit === '♥' || suit === '♦'; }
+
 function cardColor(suit) { return isRed(suit) ? 'red' : 'black'; }
 
 function makeDeck() {
@@ -110,6 +113,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     
     // Startet die Home-Oberfläche
     setupHomeUI();
+    injectSpeedInsights(); // Speed Insights hier initialisieren
     console.log("Firebase automatisch verbunden! 🔥");
   } catch (e) {
     console.error("Firebase Fehler:", e);
@@ -1491,7 +1495,6 @@ async function handleBusChoice(choice, gs) {
           [`lobbies/${lobbyId}/game/busStep`]: 4,
           [`lobbies/${lobbyId}/game/phase`]: 'end',
           [`lobbies/${lobbyId}/game/guestDriverId`]: null,
-          [`lobbies/${lobbyId}/game/pendingGuestDriverId`]: null,
           [`lobbies/${lobbyId}/game/pendingGuestDriverId`]: null,
           [`lobbies/${lobbyId}/game/takeOverRequest`]: null
         });
