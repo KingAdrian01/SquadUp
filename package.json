@@ -4,6 +4,6 @@
   "description": "SquadUp drinking game",
   "main": "app.js",
   "dependencies": {
-    "@vercel/speed-insights": "^1.0.10"
+    "@vercel/speed-insights": "^2.0.0"
   }
 }
