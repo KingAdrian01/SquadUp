@@ -62,6 +62,7 @@ if (!myId) {
 let lobbyId = null;
 let isHost = false;
 let unsubFns = [];
+let hostTimerInterval = null;
 let isProcessing = false; // Prevents double-clicks
 let pyramidSize = 6;
 
@@ -83,7 +84,7 @@ function toast(msg, duration = 2800) {
 // ── Card HTML ──────────────────────────────────────────────
 function cardHTML(card, small = false, extra = '', idx = null) {
   const dataIdx = idx !== null ? `data-idx="${idx}"` : '';
-  if (!card) return `<div class="card${small ? '-sm' : ''} face-down" ${dataIdx}></div>`;
+  if (!card) return `<div class="card${small ? '-sm' : ''} face-down ${extra}" ${dataIdx}></div>`;
   const cls = `${small ? 'card-sm' : 'card'} ${cardColor(card.suit)} ${extra}`;
   return `<div class="${cls}" ${dataIdx}>
     <span class="card-value">${card.value}</span>
@@ -157,7 +158,7 @@ async function createLobby() {
   });
 
   // Auto-remove on disconnect
-  onDisconnect(ref(db, `lobbies/${lobbyId}/players/${myId}`)).remove();
+  onDisconnect(ref(db, `lobbies/${lobbyId}`)).remove();
 
   enterLobbyScreen();
 }
@@ -233,6 +234,11 @@ function enterLobbyScreen() {
   // Listen to players
   const playersRef = ref(db, `lobbies/${lobbyId}/players`);
   const unsub1 = onValue(playersRef, snap => {
+    if (!snap.exists()) {
+      if (lobbyId && !isHost) toast('Lobby wurde geschlossen');
+      if (lobbyId) leaveLobby();
+      return;
+    }
     const players = snap.val() || {};
     renderPlayerList(players);
   });
@@ -243,6 +249,13 @@ function enterLobbyScreen() {
     if (snap.exists()) {
       const game = snap.val();
       lastGameState = game;
+    
+    // Host check: Timer für Pyramiden-Karten abgelaufen?
+    if (isHost && (game.phase === 'round2' || game.phase === 'tiebreaker') && 
+        game.matchEndTime && Date.now() > game.matchEndTime) {
+      autoLockMissedCards(game);
+    }
+
       if (game.phase === 'round1') {
         unsubFns.forEach(f => f());
         unsubFns = [];
@@ -275,7 +288,7 @@ function renderPlayerList(players) {
   list.innerHTML = sorted.map(p => {
     const isMe = p.id === myId;
     const isH = p.host;
-    const emoji = ['🎴','🃏','🂡','🂮','🂻','🂹'][sorted.indexOf(p) % 6];
+    const emoji = ['👑', '🎩', '🎲', '🎭', '🍀', '💎'][sorted.indexOf(p) % 6];
     return `<div class="player-card ${isH ? 'player-host' : ''} ${isMe ? 'player-me' : ''}">
       <div class="player-avatar">${emoji}</div>
       <div class="player-info">
@@ -288,9 +301,15 @@ function renderPlayerList(players) {
 
 async function leaveLobby() {
   unsubFns.forEach(f => f()); unsubFns = [];
+  if (gameListener) { gameListener(); gameListener = null; }
+  if (window._matchTicker) clearInterval(window._matchTicker);
+  if (hostTimerInterval) clearTimeout(hostTimerInterval);
   if (lobbyId) {
-    await remove(ref(db, `lobbies/${lobbyId}/players/${myId}`));
-    if (isHost) await remove(ref(db, `lobbies/${lobbyId}`));
+    if (isHost) {
+      await remove(ref(db, `lobbies/${lobbyId}`));
+    } else {
+      await remove(ref(db, `lobbies/${lobbyId}/players/${myId}`));
+    }
   }
   lobbyId = null; isHost = false;
   showScreen('home');
@@ -306,7 +325,6 @@ async function startGame() {
   const deck = makeDeck();
   // Deal 4 cards per player
   const playerStates = {};
-  let di = 0;
   for (const p of players) {
     playerStates[p.id] = {
       id: p.id,
@@ -320,17 +338,24 @@ async function startGame() {
     };
   }
 
-  // Build pyramid
+  // Build pyramid with unique values
   const pyrCards = [];
-  for (let i = 0; i < pyramidSize; i++) pyrCards.push(deck[di++]);
+  const usedValues = new Set();
+  const remainingDeck = [];
 
-  // Remaining deck for bus
-  const remaining = deck.slice(di);
+  for (const card of deck) {
+    if (pyrCards.length < pyramidSize && !usedValues.has(card.value)) {
+      pyrCards.push(card);
+      usedValues.add(card.value);
+    } else {
+      remainingDeck.push(card);
+    }
+  }
 
   const gameState = {
     phase: 'round1',
     pyramidSize,
-    deck: remaining,
+    deck: remainingDeck,
     pyramid: pyrCards.map(c => ({ ...c, revealed: false })),
     players: playerStates,
     playerOrder: players.map(p => p.id),
@@ -362,9 +387,23 @@ let lastGameState = null;
 function enterGameScreen() {
   showScreen('game');
   gameListener = onValue(ref(db, `lobbies/${lobbyId}/game`), snap => {
-    if (!snap.exists()) return;
-    lastGameState = snap.val();
-    renderGame(lastGameState);
+    if (!snap.exists()) {
+      if (lobbyId) leaveLobby();
+      return;
+    }
+    const gs = snap.val();
+    lastGameState = gs;
+
+    // Host-Wiederherstellung: Falls der Timer nach einem Refresh fehlt
+    if (isHost && (gs.phase === 'round2' || gs.phase === 'tiebreaker')) {
+      const now = Date.now();
+      if (gs.matchEndTime && now < gs.matchEndTime && !hostTimerInterval) {
+        const delay = (gs.matchEndTime - now) + 500;
+        hostTimerInterval = setTimeout(() => autoLockMissedCards(lastGameState), delay);
+      }
+    }
+
+    renderGame(gs);
   });
 }
 
@@ -404,8 +443,10 @@ function renderGame(gs) {
   } else if (gs.phase === 'round2') {
     phaseBadge.textContent = 'Runde 2 – Pyramide';
     cpBadge.innerHTML = '';
-    progress.textContent = `${gs.pyramidIndex}/${gs.pyramid.length} aufgedeckt`;
+    progress.textContent = `${gs.pyramidIndex}/${gs.pyramidSize} aufgedeckt`;
     renderRound2(gs, area);
+  } else if (gs.phase === 'tiebreaker') {
+    renderTiebreaker(gs, area);
   } else if (gs.phase === 'round3') {
     phaseBadge.textContent = '🚌 Der Busfahrer';
     const bus = gs.players[gs.busfahrerId];
@@ -498,25 +539,26 @@ function renderRound1(gs, isMyTurn, currentPlayer, area) {
   }
 }
 
-function getChoiceButtons(step, drawn) {
+function getChoiceButtons(step, drawn, disabled = false) {
+  const d = disabled ? 'disabled' : '';
   if (step === 0) {
-    return `<button class="choice-btn" data-choice="red"><span class="choice-emoji">🔴</span>Rot</button>
-            <button class="choice-btn" data-choice="black"><span class="choice-emoji">⚫</span>Schwarz</button>`;
+    return `<button class="choice-btn" data-choice="red" ${d}><span class="choice-emoji">🔴</span>Rot</button>
+            <button class="choice-btn" data-choice="black" ${d}><span class="choice-emoji">⚫</span>Schwarz</button>`;
   }
   if (step === 1) {
-    return `<button class="choice-btn" data-choice="higher"><span class="choice-emoji">⬆️</span>Höher</button>
-            <button class="choice-btn" data-choice="same"><span class="choice-emoji">↔️</span>Gleich</button>
-            <button class="choice-btn" data-choice="lower"><span class="choice-emoji">⬇️</span>Tiefer</button>`;
+    return `<button class="choice-btn" data-choice="higher" ${d}><span class="choice-emoji">⬆️</span>Höher</button>
+            <button class="choice-btn" data-choice="same" ${d}><span class="choice-emoji">↔️</span>Gleich</button>
+            <button class="choice-btn" data-choice="lower" ${d}><span class="choice-emoji">⬇️</span>Tiefer</button>`;
   }
   if (step === 2) {
     const lo = VALUE_ORDER[drawn[0].value];
     const hi = VALUE_ORDER[drawn[1].value];
     const [min, max] = [Math.min(lo, hi), Math.max(lo, hi)];
-    return `<button class="choice-btn" data-choice="inside"><span class="choice-emoji">🔲</span>Innen (${drawn.map(c=>c.value).join('-')})</button>
-            <button class="choice-btn" data-choice="outside"><span class="choice-emoji">📤</span>Außen</button>`;
+    return `<button class="choice-btn" data-choice="inside" ${d}><span class="choice-emoji">🔲</span>Innen (${drawn.map(c=>c.value).join('-')})</button>
+            <button class="choice-btn" data-choice="outside" ${d}><span class="choice-emoji">📤</span>Außen</button>`;
   }
   if (step === 3) {
-    return SUITS.map(s => `<button class="choice-btn" data-choice="${s}">
+    return SUITS.map(s => `<button class="choice-btn" data-choice="${s}" ${d}>
       <span class="choice-emoji">${s}</span>${SUIT_NAMES[s]}
     </button>`).join('');
   }
@@ -597,7 +639,15 @@ async function handleRound1Choice(choice, gs) {
         if (needsToDrink) {
           updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
           updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = Date.now();
-          updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = {};
+          
+          const confirmed = {};
+          gs.playerOrder.forEach(pid => {
+            const sips = (updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] !== undefined)
+              ? updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`]
+              : (gs.players[pid].sipsToDrink || 0);
+            if (sips === 0) confirmed[pid] = true;
+          });
+          updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
         } else {
           // Keiner verteilt, keiner trinkt -> Direkt zur nächsten Karte
           const nextCard = gs.currentRoundCard + 1;
@@ -668,11 +718,42 @@ async function checkNextDistributor(gs, updates) {
     }
     nextGiverIdx++;
   }
-  // No more pool to distribute -> START DRINKING PHASE
+
+  // No more pool to distribute. Anyone needs to drink?
+  let anyoneNeedsToDrink = false;
+  for (const pid of gs.playerOrder) {
+    const toDrink = updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] !== undefined 
+      ? updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] 
+      : (gs.players[pid].sipsToDrink || 0);
+    if (toDrink > 0) { anyoneNeedsToDrink = true; break; }
+  }
+
   updates[`lobbies/${lobbyId}/game/distributionActive`] = false;
+  if (anyoneNeedsToDrink) {
   updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
   updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = Date.now();
-  updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = {};
+  const confirmed = {};
+  gs.playerOrder.forEach(pid => {
+    const sips = updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] !== undefined 
+      ? updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] 
+      : (gs.players[pid].sipsToDrink || 0);
+    if (sips === 0) confirmed[pid] = true;
+  });
+  updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
+  } else {
+    // Skip drinking phase
+    if (gs.phase === 'round1') {
+      const nextRoundCard = gs.currentRoundCard + 1;
+      if (nextRoundCard >= 4) updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
+      else {
+        updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
+        updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
+      }
+    } else if (gs.phase === 'round2' && gs.pyramidIndex >= gs.pyramid.length) {
+      await finishRound2(gs, updates);
+      return;
+    }
+  }
   await update(ref(db), updates);
 }
 
@@ -697,15 +778,22 @@ async function confirmSips() {
     if (currentlyConfirmedCount + 1 >= totalPlayers) {
       // Everyone confirmed -> Next Card or Phase
       updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
-      // WICHTIG: Den gesamten Knoten auf null setzen, statt einzelne Kinder
       updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null;
       
+      if (lastGameState.phase === 'round1') {
       const nextRoundCard = lastGameState.currentRoundCard + 1;
       if (nextRoundCard >= 4) {
         updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
       } else {
         updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
         updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
+      }
+      } else if (lastGameState.phase === 'round2') {
+        // Check after drinking if pyramid is done
+        if (lastGameState.pyramidIndex >= lastGameState.pyramidSize) {
+           await finishRound2(lastGameState, updates);
+           return;
+        }
       }
     } else {
       // Nur mich selbst als bestätigt markieren
@@ -723,9 +811,9 @@ async function confirmSips() {
 
 function manageDrinkingPopup(gs) {
   const modal = document.getElementById('drinking-modal');
-  if (gs.drinkingActive) {
+  const mySips = gs.players[myId].sipsToDrink || 0;
+  if (gs.drinkingActive && mySips > 0) {
     modal.classList.add('active');
-    const mySips = gs.players[myId].sipsToDrink || 0;
     document.getElementById('drinking-count').textContent = mySips;
     const hasConfirmed = gs.confirmedDrinkers && gs.confirmedDrinkers[myId];
     document.getElementById('btn-confirm-drinking').style.display = hasConfirmed ? 'none' : 'block';
@@ -750,6 +838,8 @@ function renderRound2(gs, area) {
   const pyramid = gs.pyramid;
   const size = gs.pyramidSize;
   const pidx = gs.pyramidIndex;
+  const matchEndTime = gs.matchEndTime || 0;
+  const timeLeft = Math.max(0, Math.ceil((matchEndTime - Date.now()) / 1000));
 
   // Step 1: Prep phase - players must flip cards
   if (!gs.players[myId].readyForRound2) {
@@ -786,16 +876,17 @@ function renderRound2(gs, area) {
     html += `<div class="pyramid-row">`;
     for (let i = 0; i < rowSize; i++) {
       const card = pyramid[flatIdx];
-      const isCurrent = flatIdx === pidx && !card.revealed;
+      // Schimmer auf der zuletzt aufgedeckten Karte
+      const isCurrent = (flatIdx === pidx - 1 && (timeLeft > 0 || gs.distributionActive || gs.drinkingActive || (gs.matchEndTime && Date.now() < gs.matchEndTime + 500)));
       const isDone = card.revealed || flatIdx < pidx;
       if (card.revealed) {
-        html += `<div class="pyramid-card revealed ${cardColor(card.suit)} ${flatIdx < pidx ? 'done' : ''}" data-idx="${flatIdx}">
+        html += `<div class="pyramid-card revealed ${cardColor(card.suit)} ${isCurrent ? 'current-reveal' : ''} ${flatIdx < pidx - 1 ? 'done' : ''}" data-idx="${flatIdx}">
           <span class="card-value">${card.value}</span>
           <span class="card-suit">${card.suit}</span>
           <div class="sip-badge">${sips}</div>
         </div>`;
       } else {
-        html += `<div class="pyramid-card face-down ${isCurrent ? 'current-reveal' : ''}" data-idx="${flatIdx}"></div>`;
+        html += `<div class="pyramid-card face-down" data-idx="${flatIdx}"></div>`;
       }
       flatIdx++;
     }
@@ -828,15 +919,33 @@ function renderRound2(gs, area) {
   }
 
   // Current card reveal
-  if (pidx < pyramid.length && !gs.distributionActive && !gs.drinkingActive) {
+  if (!gs.distributionActive && !gs.drinkingActive) {
     const currentCard = pyramid[pidx];
-    if (!currentCard.revealed && allReady) {
+    const activeCard = pyramid[pidx - 1];
+    const anyoneHasSips = Object.values(gs.players).some(p => (p.sipPool || 0) > 0);
+
+    if (activeCard && timeLeft > 0) {
+      html += `<div class="info-box highlight-border">
+        Wert <strong>${activeCard.value}</strong>! Schnell antippen!<br>
+        <span style="font-size:24px; color:var(--accent); font-weight:bold;" id="match-timer">${timeLeft}s</span>
+      </div>`;
+    } else if (activeCard && timeLeft <= 0 && anyoneHasSips) {
+      if (isHost) {
+        html += `<div class="choice-section">
+          <div class="choice-title">Zeit abgelaufen</div>
+          <div class="choice-question">Es gibt Schlucke zu verteilen!</div>
+          <button class="btn btn-secondary btn-large" onclick="startPyramidDistribution()">Verteilen starten ➔</button>
+        </div>`;
+      } else {
+        html += `<div class="info-box">Warte auf Verteilung durch Host...</div>`;
+      }
+    } else if (pidx < size && allReady) {
       if (isHost) {
         html += `<div class="choice-section">
           <div class="choice-title">Nächste Pyramidenkarte aufdecken</div>
-          <div class="choice-question">Karte ${pidx + 1} von ${size}</div>
+          <div class="choice-question">Reihe ${getSipsForRow(pidx, size)} (${getSipsForRow(pidx, size)} Schlucke)</div>
           <div class="choice-buttons">
-            <button class="choice-btn" id="btn-reveal-pyramid" style="flex:1">
+            <button class="btn btn-primary btn-large" id="btn-reveal-pyramid">
               <span class="choice-emoji">🃏</span>Aufdecken
             </button>
           </div>
@@ -844,22 +953,47 @@ function renderRound2(gs, area) {
       } else {
         html += `<div class="info-box">Warte auf den Host...<br><div class="loading-dots" style="margin-top:8px"><span></span><span></span><span></span></div></div>`;
       }
-    } else if (currentCard.revealed) {
-      html += `<div class="info-box highlight-border">Karte aufgedeckt! Tippe auf eine deiner Karten, wenn du den Wert <strong>${currentCard.value}</strong> hast.</div>`;
-      if (isHost) {
-        html += `<button class="btn btn-secondary btn-large" style="margin-top:10px" onclick="startPyramidDistribution()">Fertig (Verteilen starten) ➔</button>`;
+    } else if (pidx >= size) {
+      if (isHost && gs.phase === 'round2' && timeLeft <= 0 && !anyoneHasSips) {
+        html += `<div class="choice-section">
+          <div class="choice-title">Pyramide beendet</div>
+          <button class="btn btn-secondary btn-large" onclick="startPyramidDistribution()">Fortfahren ➔</button>
+        </div>`;
+      } else {
+        html += `<div class="info-box">Alle Karten aufgedeckt!</div>`;
       }
-    } else {
-      html += `<div class="info-box">Warte auf andere Spieler...</div>`;
     }
-  } else {
-    html += `<div class="info-box">Alle Karten aufgedeckt!</div>`;
   }
 
   // All players hands
   html += renderAllHands(gs);
 
   area.innerHTML = html;
+  
+  // Lokaler UI-Ticker
+  const activeCard = pyramid[pidx - 1];
+  const isTimerVisible = activeCard && timeLeft > 0 && !gs.distributionActive && !gs.drinkingActive;
+  if (isTimerVisible) {
+    if (matchEndTime !== window._lastMatchEndTime) {
+      window._lastMatchEndTime = matchEndTime;
+      if (window._matchTicker) clearInterval(window._matchTicker);
+      window._matchTicker = setInterval(() => {
+        const nowLeft = Math.max(0, Math.ceil((matchEndTime - Date.now()) / 1000));
+        const tEl = document.getElementById('match-timer');
+        if (tEl) tEl.textContent = nowLeft + "s";
+        if (nowLeft <= 0) {
+          clearInterval(window._matchTicker);
+          window._matchTicker = null;
+          renderGame(lastGameState);
+        }
+      }, 250);
+    }
+  } else if (window._matchTicker) {
+    clearInterval(window._matchTicker);
+    window._matchTicker = null;
+    window._lastMatchEndTime = null;
+  }
+
   attachHandCardListeners(gs);
 
   if (isHost) {
@@ -868,13 +1002,61 @@ function renderRound2(gs, area) {
   }
 
   if (giverId === myId && gs.distributionActive) {
-    area.querySelectorAll('.distribute-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const amt = parseInt(document.getElementById('distribute-amount').value);
-        distributeSips(btn.dataset.target, amt, gs);
-      });
-    });
+    setupDistributeListeners(gs);
   }
+}
+
+function renderTiebreaker(gs, area) {
+  const card = gs.tiebreakerCard;
+  const matchEndTime = gs.matchEndTime || 0;
+  const timeLeft = Math.max(0, Math.ceil((matchEndTime - Date.now()) / 1000));
+  
+  let html = `<div class="pyramid-section">
+    <div class="pyramid-title">🔥 STECHEN (PHASE 2.5)</div>
+    <div class="info-box" style="margin-bottom:15px">Gleichstand! Wer zuerst eine Karte loswird, rettet sich.</div>
+    <div class="bus-revealed-cards">
+      ${card ? cardHTML(card, false, 'revealed current-reveal') : '<div class="card face-down"></div>'}
+    </div>
+  </div>`;
+
+  if (isHost && !gs.matchEndTime && !gs.distributionActive && !gs.drinkingActive) {
+    html += `<div class="choice-section">
+      <button class="btn btn-primary btn-large" onclick="revealTiebreakerCard()">Nächste Karte aufdecken</button>
+    </div>`;
+  } else if (card && timeLeft > 0 && !gs.distributionActive && !gs.drinkingActive) {
+    html += `<div class="info-box highlight-border">
+      Wert <strong>${card.value}</strong>! Schnell tippen!<br>
+      <span style="font-size:24px; color:var(--accent); font-weight:bold;" id="match-timer">${timeLeft}s</span>
+    </div>`;
+  }
+
+  html += renderAllHands(gs);
+  area.innerHTML = html;
+
+  // Ticker-Logik (identisch zu R2)
+  if (card && timeLeft > 0 && !gs.distributionActive && !gs.drinkingActive) {
+    if (matchEndTime !== window._lastMatchEndTime) {
+      window._lastMatchEndTime = matchEndTime;
+      if (window._matchTicker) clearInterval(window._matchTicker);
+      window._matchTicker = setInterval(() => {
+        const nowLeft = Math.max(0, Math.ceil((matchEndTime - Date.now()) / 1000));
+        const tEl = document.getElementById('match-timer');
+        if (tEl) tEl.textContent = nowLeft + "s";
+        if (nowLeft <= 0) { clearInterval(window._matchTicker); window._matchTicker = null; renderGame(lastGameState); }
+      }, 250);
+    }
+  }
+
+  attachHandCardListeners(gs);
+}
+
+function setupDistributeListeners(gs) {
+  document.querySelectorAll('.distribute-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const amt = parseInt(document.getElementById('distribute-amount').value);
+      distributeSips(btn.dataset.target, amt, gs);
+    });
+  });
 }
 
 function buildPyramidRows(size) {
@@ -901,12 +1083,24 @@ async function readyUpRound2() {
 }
 
 async function matchHandCard(cardIdx, gs) {
-  if (gs.phase !== 'round2' || isProcessing || gs.distributionActive || gs.drinkingActive) return;
-  const pidx = gs.pyramidIndex - 1;
-  if (pidx < 0) return;
-  
-  const pyramidCard = gs.pyramid[pidx];
-  if (!pyramidCard.revealed) return; // Nur matchen wenn Karte offen ist
+  if ((gs.phase !== 'round2' && gs.phase !== 'tiebreaker') || isProcessing || gs.distributionActive || gs.drinkingActive) {
+    return;
+  }
+
+  if (gs.matchEndTime && Date.now() > gs.matchEndTime) {
+    toast("⌛ Zu spät!");
+    return;
+  }
+
+  let targetCard;
+  if (gs.phase === 'round2') {
+    const pidx = gs.pyramidIndex - 1;
+    if (pidx < 0) return;
+    targetCard = gs.pyramid[pidx];
+  } else {
+    targetCard = gs.tiebreakerCard;
+  }
+  if (!targetCard) return;
 
   const hand = [...(gs.players[myId].hand || [])];
   const card = hand[cardIdx];
@@ -914,86 +1108,24 @@ async function matchHandCard(cardIdx, gs) {
   if (!card || card.locked || card.matched) return;
 
   isProcessing = true;
-  const updates = {};
-  
-  if (card.value === pyramidCard.value || (card.value === '10' && pyramidCard.value === '10')) {
-    toast("✅ Treffer! Du darfst verteilen.");
-    card.matched = true;
-    const sips = getSipsForRow(pidx, gs.pyramidSize);
-    updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = (gs.players[myId].sipPool || 0) + sips;
-  } else {
-    toast("❌ Falsch! Karte gesperrt.");
-    card.locked = true;
-  }
-  
-  updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = hand;
-  await update(ref(db), updates);
-  isProcessing = false;
-}
-
-async function startPyramidDistribution() {
-  const updates = {};
-  await checkNextDistributor(lastGameState, updates);
-}
-
-async function revealPyramidCard(gs) {
-  const pidx = gs.pyramidIndex;
-  if (pidx >= gs.pyramid.length || isProcessing || !isHost) return;
-  
-  isProcessing = true;
-  const updates = {};
-
-  const pyramid = [...gs.pyramid];
-  const card = pyramid[pidx];
-  card.revealed = true;
-  pyramid[pidx] = card;
-
-  updates[`lobbies/${lobbyId}/game/pyramid`] = pyramid;
-  updates[`lobbies/${lobbyId}/game/pyramidIndex`] = pidx + 1;
-
-  // Wenn das die letzte Karte war -> Busfahrer direkt hier ermitteln
-  if (pidx + 1 >= gs.pyramid.length) {
-    const playerResults = gs.playerOrder.map(pid => {
-      // Wir müssen die aktuelle Hand benutzen (nachdem Treffer entfernt wurden!)
-      const currentHand = updates[`lobbies/${lobbyId}/game/players/${pid}/hand`] || gs.players[pid].hand || [];
-      return {
-        pid,
-        hand: currentHand,
-        sipsTotal: updates[`lobbies/${lobbyId}/game/players/${pid}/sipsTotal`] || gs.players[pid].sipsTotal || 0,
-        name: gs.players[pid].name
-      };
-    });
-
-    const maxCards = Math.max(...playerResults.map(p => p.hand.length));
-    let busfahrerId;
-
-    if (maxCards === 0) {
-      // Keiner hat mehr Karten -> Wer am meisten getrunken hat verliert
-      busfahrerId = playerResults.reduce((a, b) => b.sipsTotal > a.sipsTotal ? b : a).pid;
-    } else {
-      const candidates = playerResults.filter(p => p.hand.length === maxCards);
-      if (candidates.length === 1) {
-        busfahrerId = candidates[0].pid;
-      } else {
-        // Tiebreak: Niedrigste Karte auf der Hand
-        busfahrerId = candidates.reduce((a, b) => {
-          const aMin = Math.min(...a.hand.map(c => VALUE_ORDER[c.value]));
-          const bMin = Math.min(...b.hand.map(c => VALUE_ORDER[c.value]));
-          return bMin < aMin ? b : a;
-        }).pid;
-      }
-    }
-
-    updates[`lobbies/${lobbyId}/game/busfahrerId`] = busfahrerId;
-    updates[`lobbies/${lobbyId}/game/phase`] = 'round3';
-    updates[`lobbies/${lobbyId}/game/busStep`] = 0;
-    updates[`lobbies/${lobbyId}/game/busCards`] = [];
-    updates[`lobbies/${lobbyId}/game/busRestarts`] = 0;
-    
-    toast(`🚌 ${gs.players[busfahrerId].name} ist der Busfahrer!`, 5000);
-  }
-
   try {
+    const updates = {};
+    if (card.value === targetCard.value || (card.value === '10' && targetCard.value === '10')) {
+      toast("✅ Treffer! Du darfst verteilen.");
+      card.matched = true;
+      const sips = gs.phase === 'round2' ? getSipsForRow(gs.pyramidIndex - 1, gs.pyramidSize) : 1;
+      updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = (gs.players[myId].sipPool || 0) + sips;
+    } else {
+      toast("❌ Falsch! Karte gesperrt.");
+      card.locked = true;
+    }
+    
+    updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = hand;
+    
+    if (gs.phase === 'tiebreaker') {
+      await finishRound2(gs, updates);
+      return;
+    }
     await update(ref(db), updates);
   } catch (e) {
     console.error(e);
@@ -1002,9 +1134,205 @@ async function revealPyramidCard(gs) {
   }
 }
 
+async function startPyramidDistribution() {
+  if (isProcessing || !isHost) return;
+  isProcessing = true;
+  try {
+    const gs = lastGameState;
+    const updates = {};
+    
+    // Prüfen, ob überhaupt jemand Schlucke zum Verteilen hat
+    let firstGiverIdx = -1;
+    for (let i = 0; i < gs.playerOrder.length; i++) {
+      const pid = gs.playerOrder[i];
+      if ((gs.players[pid].sipPool || 0) > 0) {
+        firstGiverIdx = i;
+        break;
+      }
+    }
+
+    if (firstGiverIdx !== -1) {
+      // Jemand muss verteilen -> Phase aktivieren
+      updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
+      updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = firstGiverIdx;
+      await update(ref(db), updates);
+    } else {
+      // Niemand hat Schlucke -> checkNextDistributor prüft Trinken oder Phasenwechsel
+      // Wir fingieren einen GiverIndex von -1, damit checkNextDistributor bei 0 anfängt zu suchen
+      await checkNextDistributor({ ...gs, distributionGiverIndex: -1 }, updates);
+    }
+  } catch (e) {
+    console.error("Fehler beim Starten der Verteilung:", e);
+  } finally {
+    isProcessing = false;
+  }
+}
+
+async function autoLockMissedCards(gs) {
+  if (!isHost) return;
+  if (hostTimerInterval) { clearTimeout(hostTimerInterval); hostTimerInterval = null; }
+  
+  isProcessing = true;
+  try {
+    const targetCard = gs.phase === 'round2' ? gs.pyramid[gs.pyramidIndex - 1] : gs.tiebreakerCard;
+    const updates = {};
+    if (!targetCard) return;
+
+    for (const pid of gs.playerOrder) {
+      const hand = [...(gs.players[pid].hand || [])];
+      let playerChanged = false;
+      hand.forEach(card => {
+        if (!card.matched && !card.locked && (card.value === targetCard.value || (card.value === '10' && targetCard.value === '10'))) {
+          card.locked = true;
+          playerChanged = true;
+        }
+      });
+      if (playerChanged) {
+        updates[`lobbies/${lobbyId}/game/players/${pid}/hand`] = hand;
+      }
+    }
+
+    updates[`lobbies/${lobbyId}/game/matchEndTime`] = null;
+
+    // Check if anyone has sips to distribute
+    let firstGiverIdx = -1;
+    for (let i = 0; i < gs.playerOrder.length; i++) {
+      if ((gs.players[gs.playerOrder[i]].sipPool || 0) > 0) {
+        firstGiverIdx = i; break;
+      }
+    }
+
+    if (firstGiverIdx !== -1) {
+      updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
+      updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = firstGiverIdx;
+    } else {
+      // Check if anyone needs to drink (from being locked/incorrect)
+      let anyoneNeedsToDrink = gs.playerOrder.some(pid => (gs.players[pid].sipsToDrink || 0) > 0);
+      if (anyoneNeedsToDrink) {
+        updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
+        updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = Date.now();
+        const confirmed = {};
+        gs.playerOrder.forEach(pid => {
+          const sips = (updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] !== undefined)
+            ? updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`]
+            : (gs.players[pid].sipsToDrink || 0);
+          if (sips === 0) confirmed[pid] = true;
+        });
+        updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
+      } else if (gs.phase === 'tiebreaker' || gs.pyramidIndex >= gs.pyramid.length) {
+        // No distribution, no drinking -> Check if round ends
+        await finishRound2(gs, updates);
+        return;
+      }
+    }
+    
+    await update(ref(db), updates);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    isProcessing = false;
+  }
+}
+
+async function revealPyramidCard(gs) {
+  const pidx = gs.pyramidIndex;
+  if (pidx >= gs.pyramidSize || isProcessing || !isHost) return;
+  
+  isProcessing = true;
+  const updates = {};
+
+  updates[`lobbies/${lobbyId}/game/pyramid/${pidx}/revealed`] = true;
+  updates[`lobbies/${lobbyId}/game/pyramidIndex`] = pidx + 1;
+  updates[`lobbies/${lobbyId}/game/matchEndTime`] = Date.now() + 10000;
+
+  try {
+    if (hostTimerInterval) clearTimeout(hostTimerInterval);
+    hostTimerInterval = setTimeout(() => {
+      autoLockMissedCards(lastGameState);
+    }, 10500);
+
+    await update(ref(db), updates);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    isProcessing = false;
+  }
+}
+
+async function revealTiebreakerCard() {
+  if (!isHost || isProcessing) return;
+  isProcessing = true;
+  const deck = [...lastGameState.deck];
+  const card = deck.shift();
+  const updates = {
+    [`lobbies/${lobbyId}/game/deck`]: deck,
+    [`lobbies/${lobbyId}/game/tiebreakerCard`]: card,
+    [`lobbies/${lobbyId}/game/matchEndTime`]: Date.now() + 10000
+  };
+  
+  if (hostTimerInterval) clearTimeout(hostTimerInterval);
+  hostTimerInterval = setTimeout(() => autoLockMissedCards(lastGameState), 10500);
+  
+  await update(ref(db), updates);
+  isProcessing = false;
+}
+
+async function finishRound2(gs, updates = {}) {
+  const results = gs.playerOrder.map(pid => {
+    const hand = updates[`lobbies/${lobbyId}/game/players/${pid}/hand`] || gs.players[pid].hand || [];
+    return {
+      pid,
+      total: hand.filter(c => !c.matched).length,
+      active: hand.filter(c => !c.matched && !c.locked).length,
+      sipsTotal: updates[`lobbies/${lobbyId}/game/players/${pid}/sipsTotal`] || gs.players[pid].sipsTotal || 0
+    };
+  });
+
+  const maxCards = Math.max(...results.map(r => r.total));
+  const candidates = results.filter(r => r.total === maxCards);
+
+  if (candidates.length === 1 || maxCards === 0) {
+    let busfahrerId;
+    if (maxCards === 0) {
+      busfahrerId = results.reduce((a, b) => b.sipsTotal > a.sipsTotal ? b : a).pid;
+    } else {
+      busfahrerId = candidates[0].pid;
+    }
+    updates[`lobbies/${lobbyId}/game/busfahrerId`] = busfahrerId;
+    updates[`lobbies/${lobbyId}/game/phase`] = 'round3';
+    updates[`lobbies/${lobbyId}/game/busStep`] = 0;
+    updates[`lobbies/${lobbyId}/game/busCards`] = [];
+    updates[`lobbies/${lobbyId}/game/busRestarts`] = 0;
+    updates[`lobbies/${lobbyId}/game/deck`] = makeDeck();
+    
+    toast(`🚌 ${gs.players[busfahrerId].name} ist der Busfahrer!`, 5000);
+    await update(ref(db), updates);
+  } else {
+    // TIE! Check for auto-loser (max cards but 0 active cards)
+    const autoLoser = candidates.find(c => c.active === 0);
+    if (autoLoser) {
+      updates[`lobbies/${lobbyId}/game/busfahrerId`] = autoLoser.pid;
+      updates[`lobbies/${lobbyId}/game/phase`] = 'round3';
+      await update(ref(db), updates);
+    } else if (gs.phase !== 'tiebreaker') {
+      updates[`lobbies/${lobbyId}/game/phase`] = 'tiebreaker';
+      updates[`lobbies/${lobbyId}/game/tiebreakerCard`] = null;
+      updates[`lobbies/${lobbyId}/game/matchEndTime`] = null;
+      await update(ref(db), updates);
+    } else {
+      // Already in tiebreaker, just sync updates
+      await update(ref(db), updates);
+    }
+  }
+}
+
 // ─ ROUND 3 (Busfahrer) ──────────────────────────────────
 function renderRound3(gs, area) {
-  const isBus = gs.busfahrerId === myId;
+  const isMainBus = gs.busfahrerId === myId;
+  const guestId = gs.guestDriverId;
+  const isGuestBus = guestId === myId;
+  const isDriving = isGuestBus || (isMainBus && !guestId);
+
   const busPlayer = gs.players[gs.busfahrerId];
   const busCards = gs.busCards || [];
   const busStep = gs.busStep;
@@ -1035,14 +1363,38 @@ function renderRound3(gs, area) {
   html += `</div>`;
 
   if (busStep < 4) {
-    if (isBus) {
-      html += `<div class="choice-title">${stepLabels[busStep]}</div>
-        <div class="choice-buttons" style="margin-top:12px">
-          ${getBusChoiceButtons(busStep, busCards)}
-        </div>`;
-    } else {
-      html += `<div class="spectator-msg"><strong>${escHtml(busPlayer.name)}</strong> ist dran...<br>
-        <em>${stepLabels[busStep]}</em>
+    // Anfrage-Logik anzeigen
+    if (gs.takeOverRequest && isMainBus && !gs.guestDriverId && !gs.pendingGuestDriverId) {
+      const requester = gs.players[gs.takeOverRequest];
+      html += `<div class="choice-section highlight-border" style="margin-bottom:15px">
+        <div class="choice-title">🤝 Anfrage erhalten</div>
+        <div class="choice-question" style="font-size:18px">${escHtml(requester.name)} möchte eine Karte für dich ziehen!</div>
+        <div class="choice-buttons">
+          <button class="btn btn-primary" onclick="respondToBusTakeOver(true)">Annehmen</button>
+          <button class="btn btn-secondary" onclick="respondToBusTakeOver(false)">Ablehnen</button>
+        </div>
+      </div>`;
+    } else if (gs.takeOverRequest && !isMainBus && !gs.guestDriverId && !gs.pendingGuestDriverId) {
+      html += `<div class="info-box" style="margin-bottom:15px">Anfrage gesendet. Warte auf Bestätigung...</div>`;
+    } else if (gs.pendingGuestDriverId) {
+      const pPlayer = gs.players[gs.pendingGuestDriverId];
+      html += `<div class="info-box" style="margin-bottom:15px">🤝 <strong>${escHtml(pPlayer.name)}</strong> übernimmt nach dem nächsten Fehler!</div>`;
+    } else if (guestId) {
+      const gPlayer = gs.players[guestId];
+      html += `<div class="info-box highlight-border" style="margin-bottom:15px">🌟 <strong>${escHtml(gPlayer.name)}</strong> hat das Steuer für diese Runde übernommen!</div>`;
+    } else if (!isMainBus && !gs.takeOverRequest && !gs.guestDriverId && !gs.pendingGuestDriverId && !gs.drinkingActive) {
+      html += `<button class="btn btn-secondary btn-large" style="margin-bottom:15px" onclick="requestBusTakeOver()">🙋‍♂️ Steuer für eine Karte übernehmen</button>`;
+    }
+
+    html += `<div class="choice-title">${stepLabels[busStep]}</div>
+      <div class="choice-buttons" style="margin-top:12px">
+        ${getBusChoiceButtons(busStep, busCards, !isDriving || gs.drinkingActive)}
+      </div>`;
+
+    if (!isDriving && !gs.drinkingActive) {
+      const activeName = guestId ? gs.players[guestId].name : busPlayer.name;
+      html += `<div class="spectator-msg">
+        <strong>${escHtml(activeName)}</strong> ist am Steuer...
         <div style="margin-top:16px"><div class="loading-dots"><span></span><span></span><span></span></div></div>
       </div>`;
     }
@@ -1056,23 +1408,44 @@ function renderRound3(gs, area) {
 
   area.innerHTML = html;
 
-  if (isBus && busStep < 4) {
+  if (isDriving && busStep < 4 && !gs.drinkingActive) {
     area.querySelectorAll('.choice-btn').forEach(btn => {
       btn.addEventListener('click', () => handleBusChoice(btn.dataset.choice, gs));
     });
   }
 }
 
-function getBusChoiceButtons(step, drawn) {
-  return getChoiceButtons(step, drawn);
+function getBusChoiceButtons(step, drawn, disabled = false) {
+  return getChoiceButtons(step, drawn, disabled);
+}
+
+async function requestBusTakeOver() {
+  if (isProcessing) return;
+  await update(ref(db, `lobbies/${lobbyId}/game`), { takeOverRequest: myId });
+}
+
+async function respondToBusTakeOver(accepted) {
+  if (isProcessing) return;
+  const updates = {
+    [`lobbies/${lobbyId}/game/takeOverRequest`]: null
+  };
+  if (accepted) {
+    updates[`lobbies/${lobbyId}/game/pendingGuestDriverId`] = lastGameState.takeOverRequest;
+  }
+  await update(ref(db), updates);
+  if (!accepted) toast("Anfrage abgelehnt ✋");
 }
 
 async function handleBusChoice(choice, gs) {
   if (isProcessing) return;
   isProcessing = true;
   const busCards = [...(gs.busCards || [])];
-  const deckCopy = [...gs.deck];
+  let deckCopy = [...(gs.deck || [])];
+  
+  // Deck neu mischen, falls es leer ist
+  if (deckCopy.length === 0) deckCopy = makeDeck();
   const drawnCard = deckCopy.shift();
+
   const step = gs.busStep;
   let correct = false;
 
@@ -1105,6 +1478,8 @@ async function handleBusChoice(choice, gs) {
         [`lobbies/${lobbyId}/game/busCards`]: newBusCards,
         [`lobbies/${lobbyId}/game/busStep`]: 4,
         [`lobbies/${lobbyId}/game/phase`]: 'end',
+        [`lobbies/${lobbyId}/game/guestDriverId`]: null,
+        [`lobbies/${lobbyId}/game/pendingGuestDriverId`]: null,
       });
       toast('🎉 Busfahrer geschafft! Spiel beendet!', 4000);
     } else {
@@ -1112,20 +1487,36 @@ async function handleBusChoice(choice, gs) {
         [`lobbies/${lobbyId}/game/deck`]: deckCopy,
         [`lobbies/${lobbyId}/game/busCards`]: newBusCards,
         [`lobbies/${lobbyId}/game/busStep`]: step + 1,
+        [`lobbies/${lobbyId}/game/guestDriverId`]: (gs.guestDriverId ? gs.guestDriverId : null),
       });
       toast('✅ Richtig! Weiter...');
     }
   } else {
     // Wrong – drink and restart
     toast(`❌ Falsch! ${sips} Schluck${sips > 1 ? 'e' : ''} trinken 🍺 – Von vorne!`, 4000);
-    await update(ref(db), {
+    const updates = {
       [`lobbies/${lobbyId}/game/deck`]: deckCopy,
       [`lobbies/${lobbyId}/game/busCards`]: [],
       [`lobbies/${lobbyId}/game/busStep`]: 0,
       [`lobbies/${lobbyId}/game/busRestarts`]: (gs.busRestarts || 0) + 1,
       [`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`]: (gs.players[myId]?.sipsToDrink || 0) + sips,
       [`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`]: (gs.players[myId]?.sipsTotal || 0) + sips,
-    });
+      [`lobbies/${lobbyId}/game/drinkingActive`]: true,
+      [`lobbies/${lobbyId}/game/drinkingStartTime`]: Date.now(),
+      [`lobbies/${lobbyId}/game/confirmedDrinkers`]: {}
+    };
+
+    if (gs.guestDriverId) {
+      updates[`lobbies/${lobbyId}/game/guestDriverId`] = null;
+    } else if (gs.pendingGuestDriverId) {
+      updates[`lobbies/${lobbyId}/game/guestDriverId`] = gs.pendingGuestDriverId;
+      updates[`lobbies/${lobbyId}/game/pendingGuestDriverId`] = null;
+      toast(`🤝 ${gs.players[updates[`lobbies/${lobbyId}/game/guestDriverId`]].name} übernimmt jetzt das Steuer!`);
+    }
+
+    // Alle anderen als bestätigt markieren
+    gs.playerOrder.forEach(pid => { if(pid !== myId) updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${pid}`] = true; });
+    await update(ref(db), updates);
   }
   isProcessing = false;
 }
@@ -1201,7 +1592,7 @@ function renderAllHands(gs) {
             : hand
                 .map((c, idx) => {
                   const isFaceDown = gs.phase === 'round2' && p.readyForRound2;
-                  let extra = 'hand-card';
+                  let extra = isMe ? 'hand-card' : '';
                   if (c.matched) extra += ' matched';
                   if (c.locked) extra += ' locked';
                   const displayCard = isFaceDown && !c.matched && !c.locked ? null : c;
