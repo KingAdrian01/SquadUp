@@ -547,17 +547,15 @@ function getChoiceButtons(step, drawn, disabled = false) {
   }
   if (step === 1) {
     return `<button class="choice-btn" data-choice="higher" ${d}><span class="choice-emoji">⬆️</span>Höher</button>
-            <button class="choice-btn" data-choice="same" ${d}><span class="choice-emoji">↔️</span>Gleich</button>
             <button class="choice-btn" data-choice="lower" ${d}><span class="choice-emoji">⬇️</span>Tiefer</button>`;
-  }
-  if (step === 2) {
+  } else if (step === 2) {
     const lo = VALUE_ORDER[drawn[0].value];
     const hi = VALUE_ORDER[drawn[1].value];
     const [min, max] = [Math.min(lo, hi), Math.max(lo, hi)];
     return `<button class="choice-btn" data-choice="inside" ${d}><span class="choice-emoji">🔲</span>Innen (${drawn.map(c=>c.value).join('-')})</button>
             <button class="choice-btn" data-choice="outside" ${d}><span class="choice-emoji">📤</span>Außen</button>`;
   }
-  if (step === 3) {
+  else if (step === 3) {
     return SUITS.map(s => `<button class="choice-btn" data-choice="${s}" ${d}>
       <span class="choice-emoji">${s}</span>${SUIT_NAMES[s]}
     </button>`).join('');
@@ -580,9 +578,7 @@ async function handleRound1Choice(choice, gs) {
     } else if (step === 1) {
       const prev = VALUE_ORDER[hand[0].value];
       const cur = VALUE_ORDER[drawnCard.value];
-      if (choice === 'higher') correct = cur > prev;
-      else if (choice === 'lower') correct = cur < prev;
-      else correct = cur === prev;
+      correct = (choice === 'higher' && cur > prev) || (choice === 'lower' && cur < prev);
     } else if (step === 2) {
       const vals = hand.map(c => VALUE_ORDER[c.value]);
       const [lo, hi] = [Math.min(...vals), Math.max(...vals)];
@@ -759,44 +755,37 @@ async function checkNextDistributor(gs, updates) {
 
 async function confirmSips() {
   if (!lastGameState || isProcessing) return;
-  // Verhindern, dass man mehrfach klickt, wenn man bereits bestätigt hat
   if (lastGameState.confirmedDrinkers && lastGameState.confirmedDrinkers[myId]) return;
 
   isProcessing = true;
   try {
     const updates = {};
-    
-    // Berechne die Anzahl der bereits bestätigten Spieler
     const confirmedObj = lastGameState.confirmedDrinkers || {};
     const currentlyConfirmedCount = Object.keys(confirmedObj).length;
     const totalPlayers = Object.keys(lastGameState.players || {}).length;
 
-    // Schlucke für diesen Spieler auf 0 setzen
     updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
 
-    // Wenn ich der Letzte bin, der bestätigt: Phase beenden und Liste leeren
     if (currentlyConfirmedCount + 1 >= totalPlayers) {
-      // Everyone confirmed -> Next Card or Phase
       updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
       updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null;
       
       if (lastGameState.phase === 'round1') {
-      const nextRoundCard = lastGameState.currentRoundCard + 1;
-      if (nextRoundCard >= 4) {
-        updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
-      } else {
-        updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
-        updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
-      }
+        const nextRoundCard = lastGameState.currentRoundCard + 1;
+        if (nextRoundCard >= 4) {
+          updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
+        } else {
+          updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
+          updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
+        }
       } else if (lastGameState.phase === 'round2') {
-        // Check after drinking if pyramid is done
         if (lastGameState.pyramidIndex >= lastGameState.pyramidSize) {
            await finishRound2(lastGameState, updates);
            return;
         }
       }
+      // Phase 3 benötigt kein spezielles Handling hier, da drinkingActive=false ausreicht
     } else {
-      // Nur mich selbst als bestätigt markieren
       updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
     }
 
@@ -1368,7 +1357,7 @@ function renderRound3(gs, area) {
       const requester = gs.players[gs.takeOverRequest];
       html += `<div class="choice-section highlight-border" style="margin-bottom:15px">
         <div class="choice-title">🤝 Anfrage erhalten</div>
-        <div class="choice-question" style="font-size:18px">${escHtml(requester.name)} möchte eine Karte für dich ziehen!</div>
+        <div class="choice-question" style="font-size:18px">${escHtml(requester.name)} möchte eine Runde für dich fahren!</div>
         <div class="choice-buttons">
           <button class="btn btn-primary" onclick="respondToBusTakeOver(true)">Annehmen</button>
           <button class="btn btn-secondary" onclick="respondToBusTakeOver(false)">Ablehnen</button>
@@ -1378,12 +1367,12 @@ function renderRound3(gs, area) {
       html += `<div class="info-box" style="margin-bottom:15px">Anfrage gesendet. Warte auf Bestätigung...</div>`;
     } else if (gs.pendingGuestDriverId) {
       const pPlayer = gs.players[gs.pendingGuestDriverId];
-      html += `<div class="info-box" style="margin-bottom:15px">🤝 <strong>${escHtml(pPlayer.name)}</strong> übernimmt nach dem nächsten Fehler!</div>`;
+      html += `<div class="info-box" style="margin-bottom:15px">⏳ <strong>${escHtml(pPlayer.name)}</strong> übernimmt nach dem nächsten Fehler!</div>`;
     } else if (guestId) {
       const gPlayer = gs.players[guestId];
       html += `<div class="info-box highlight-border" style="margin-bottom:15px">🌟 <strong>${escHtml(gPlayer.name)}</strong> hat das Steuer für diese Runde übernommen!</div>`;
     } else if (!isMainBus && !gs.takeOverRequest && !gs.guestDriverId && !gs.pendingGuestDriverId && !gs.drinkingActive) {
-      html += `<button class="btn btn-secondary btn-large" style="margin-bottom:15px" onclick="requestBusTakeOver()">🙋‍♂️ Steuer für eine Karte übernehmen</button>`;
+      html += `<button class="btn btn-secondary btn-large" style="margin-bottom:15px" onclick="requestBusTakeOver()">🙋‍♂️ Steuer für eine Runde übernehmen</button>`;
     }
 
     html += `<div class="choice-title">${stepLabels[busStep]}</div>
@@ -1420,106 +1409,148 @@ function getBusChoiceButtons(step, drawn, disabled = false) {
 }
 
 async function requestBusTakeOver() {
-  if (isProcessing) return;
-  await update(ref(db, `lobbies/${lobbyId}/game`), { takeOverRequest: myId });
+  if (!fbReady || isProcessing) return;
+  isProcessing = true;
+  try {
+    await update(ref(db, `lobbies/${lobbyId}/game`), { takeOverRequest: myId });
+  } catch (e) {
+    console.error("Fehler bei Übernahme-Anfrage:", e);
+  } finally {
+    isProcessing = false;
+  }
 }
 
 async function respondToBusTakeOver(accepted) {
-  if (isProcessing) return;
-  const updates = {
-    [`lobbies/${lobbyId}/game/takeOverRequest`]: null
-  };
-  if (accepted) {
-    updates[`lobbies/${lobbyId}/game/pendingGuestDriverId`] = lastGameState.takeOverRequest;
+  if (!fbReady || isProcessing) return;
+  isProcessing = true;
+  try {
+    const requesterId = lastGameState?.takeOverRequest;
+    const updates = {
+      [`lobbies/${lobbyId}/game/takeOverRequest`]: null
+    };
+    if (accepted && requesterId) {
+      // In die Warteschlange setzen
+      updates[`lobbies/${lobbyId}/game/pendingGuestDriverId`] = requesterId;
+      const nextName = lastGameState.players[requesterId]?.name || 'Jemand';
+      toast(`🤝 ${nextName} übernimmt nach dem nächsten Fehler!`);
+    }
+    await update(ref(db), updates);
+    if (!accepted) toast("Anfrage abgelehnt ✋");
+  } catch (e) {
+    console.error("Fehler bei Übernahme-Antwort:", e);
+  } finally {
+    isProcessing = false;
   }
-  await update(ref(db), updates);
-  if (!accepted) toast("Anfrage abgelehnt ✋");
 }
+
 
 async function handleBusChoice(choice, gs) {
-  if (isProcessing) return;
+  if (!fbReady || isProcessing) return;
+
+  const isMainBus = gs.busfahrerId === myId;
+  const isGuestBus = gs.guestDriverId === myId;
+  const isDriving = isGuestBus || (isMainBus && !gs.guestDriverId);
+  if (!isDriving) return;
+
   isProcessing = true;
-  const busCards = [...(gs.busCards || [])];
-  let deckCopy = [...(gs.deck || [])];
-  
-  // Deck neu mischen, falls es leer ist
-  if (deckCopy.length === 0) deckCopy = makeDeck();
-  const drawnCard = deckCopy.shift();
+  try {
+    const busCards = [...(gs.busCards || [])];
+    let deckCopy = gs.deck ? [...gs.deck] : [];
 
-  const step = gs.busStep;
-  let correct = false;
+    if (deckCopy.length === 0) deckCopy = makeDeck();
+    const drawnCard = deckCopy.shift();
 
-  if (step === 0) {
-    correct = (choice === 'red') === isRed(drawnCard.suit);
-  } else if (step === 1) {
-    const prev = VALUE_ORDER[busCards[0].value];
-    const cur = VALUE_ORDER[drawnCard.value];
-    if (choice === 'higher') correct = cur > prev;
-    else if (choice === 'lower') correct = cur < prev;
-    else correct = cur === prev;
-  } else if (step === 2) {
-    const vals = busCards.map(c => VALUE_ORDER[c.value]);
-    const [lo, hi] = [Math.min(...vals), Math.max(...vals)];
-    const cur = VALUE_ORDER[drawnCard.value];
-    if (choice === 'inside') correct = cur > lo && cur < hi;
-    else correct = cur < lo || cur > hi;
-  } else if (step === 3) {
-    correct = choice === drawnCard.suit;
-  }
+    const step = gs.busStep;
+    let correct = false;
 
-  const newBusCards = [...busCards, drawnCard];
-  const sips = step + 1;
+    if (step === 0) {
+      correct = (choice === 'red') === isRed(drawnCard.suit);
+    } else if (step === 1) {
+      const prev = VALUE_ORDER[busCards[0].value];
+      const cur = VALUE_ORDER[drawnCard.value];
+      correct = (choice === 'higher' && cur > prev) || (choice === 'lower' && cur < prev);
+    } else if (step === 2) {
+      const vals = busCards.map(c => VALUE_ORDER[c.value]);
+      const [lo, hi] = [Math.min(...vals), Math.max(...vals)];
+      const cur = VALUE_ORDER[drawnCard.value];
+      if (choice === 'inside') correct = cur > lo && cur < hi;
+      else correct = cur < lo || cur > hi;
+    } else if (step === 3) {
+      correct = choice === drawnCard.suit;
+    }
 
-  if (correct) {
-    if (step === 3) {
-      // WIN!
-      await update(ref(db), {
-        [`lobbies/${lobbyId}/game/deck`]: deckCopy,
-        [`lobbies/${lobbyId}/game/busCards`]: newBusCards,
-        [`lobbies/${lobbyId}/game/busStep`]: 4,
-        [`lobbies/${lobbyId}/game/phase`]: 'end',
-        [`lobbies/${lobbyId}/game/guestDriverId`]: null,
-        [`lobbies/${lobbyId}/game/pendingGuestDriverId`]: null,
-      });
-      toast('🎉 Busfahrer geschafft! Spiel beendet!', 4000);
+    const newBusCards = [...busCards, drawnCard];
+    const sips = step + 1;
+
+    if (correct) {
+      if (step === 3) {
+        // Sieg!
+        await update(ref(db), {
+          [`lobbies/${lobbyId}/game/deck`]: deckCopy,
+          [`lobbies/${lobbyId}/game/busCards`]: newBusCards,
+          [`lobbies/${lobbyId}/game/busStep`]: 4,
+          [`lobbies/${lobbyId}/game/phase`]: 'end',
+          [`lobbies/${lobbyId}/game/guestDriverId`]: null,
+          [`lobbies/${lobbyId}/game/pendingGuestDriverId`]: null,
+          [`lobbies/${lobbyId}/game/pendingGuestDriverId`]: null,
+          [`lobbies/${lobbyId}/game/takeOverRequest`]: null
+        });
+        toast('🎉 Busfahrer geschafft! Spiel beendet!', 4000);
+      } else {
+        const updates = {
+          [`lobbies/${lobbyId}/game/deck`]: deckCopy,
+          [`lobbies/${lobbyId}/game/busCards`]: newBusCards,
+          [`lobbies/${lobbyId}/game/busStep`]: step + 1,
+          [`lobbies/${lobbyId}/game/takeOverRequest`]: null,
+          // Gastfahrer-Zustand bleibt wie er ist (Gast fährt weiter oder Hauptfahrer fährt weiter)
+        };
+        await update(ref(db), updates);
+        toast('✅ Richtig! Weiter...');
+      }
     } else {
-      await update(ref(db), {
-        [`lobbies/${lobbyId}/game/deck`]: deckCopy,
-        [`lobbies/${lobbyId}/game/busCards`]: newBusCards,
-        [`lobbies/${lobbyId}/game/busStep`]: step + 1,
-        [`lobbies/${lobbyId}/game/guestDriverId`]: (gs.guestDriverId ? gs.guestDriverId : null),
+      // FALSCH: Der aktuelle Fahrer muss trinken
+      const sipsToDrink = (gs.players[myId]?.sipsToDrink || 0) + sips;
+      const sipsTotal = (gs.players[myId]?.sipsTotal || 0) + sips;
+
+      const confirmed = {};
+      Object.keys(gs.players || {}).forEach(pid => { 
+        if(pid !== myId) confirmed[pid] = true; 
       });
-      toast('✅ Richtig! Weiter...');
-    }
-  } else {
-    // Wrong – drink and restart
-    toast(`❌ Falsch! ${sips} Schluck${sips > 1 ? 'e' : ''} trinken 🍺 – Von vorne!`, 4000);
-    const updates = {
-      [`lobbies/${lobbyId}/game/deck`]: deckCopy,
-      [`lobbies/${lobbyId}/game/busCards`]: [],
-      [`lobbies/${lobbyId}/game/busStep`]: 0,
-      [`lobbies/${lobbyId}/game/busRestarts`]: (gs.busRestarts || 0) + 1,
-      [`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`]: (gs.players[myId]?.sipsToDrink || 0) + sips,
-      [`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`]: (gs.players[myId]?.sipsTotal || 0) + sips,
-      [`lobbies/${lobbyId}/game/drinkingActive`]: true,
-      [`lobbies/${lobbyId}/game/drinkingStartTime`]: Date.now(),
-      [`lobbies/${lobbyId}/game/confirmedDrinkers`]: {}
-    };
 
-    if (gs.guestDriverId) {
-      updates[`lobbies/${lobbyId}/game/guestDriverId`] = null;
-    } else if (gs.pendingGuestDriverId) {
-      updates[`lobbies/${lobbyId}/game/guestDriverId`] = gs.pendingGuestDriverId;
-      updates[`lobbies/${lobbyId}/game/pendingGuestDriverId`] = null;
-      toast(`🤝 ${gs.players[updates[`lobbies/${lobbyId}/game/guestDriverId`]].name} übernimmt jetzt das Steuer!`);
-    }
+      const updates = {
+        [`lobbies/${lobbyId}/game/deck`]: deckCopy,
+        [`lobbies/${lobbyId}/game/busRestarts`]: (gs.busRestarts || 0) + 1,
+        [`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`]: sipsToDrink,
+        [`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`]: sipsTotal,
+        [`lobbies/${lobbyId}/game/drinkingActive`]: true,
+        [`lobbies/${lobbyId}/game/drinkingStartTime`]: Date.now(),
+        [`lobbies/${lobbyId}/game/confirmedDrinkers`]: confirmed,
+        [`lobbies/${lobbyId}/game/busCards`]: [],
+        [`lobbies/${lobbyId}/game/busStep`]: 0,
+        [`lobbies/${lobbyId}/game/takeOverRequest`]: null,
+        [`lobbies/${lobbyId}/game/guestDriverId`]: null // Standardmäßig zurück zum Hauptfahrer
+      };
 
-    // Alle anderen als bestätigt markieren
-    gs.playerOrder.forEach(pid => { if(pid !== myId) updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${pid}`] = true; });
-    await update(ref(db), updates);
+      // Logik für den Wechsel:
+      if (gs.pendingGuestDriverId) {
+        // Wenn jemand gewartet hat, übernimmt er JETZT für den Neustart
+        updates[`lobbies/${lobbyId}/game/guestDriverId`] = gs.pendingGuestDriverId;
+        updates[`lobbies/${lobbyId}/game/pendingGuestDriverId`] = null;
+        const nextName = gs.players[gs.pendingGuestDriverId]?.name || 'Jemand';
+        toast(`🤝 ${nextName} übernimmt jetzt das Steuer!`);
+      }
+      
+      toast(`❌ Falsch! ${sips} Schluck${sips > 1 ? 'e' : ''} trinken 🍺`, 4000);
+      await update(ref(db), updates);
+    }
+  } catch (e) {
+    console.error("Fehler in handleBusChoice:", e);
+    toast("Da ist etwas schiefgelaufen 🤯");
+  } finally {
+    isProcessing = false;
   }
-  isProcessing = false;
 }
+
 
 // ─ END SCREEN ──────────────────────────────────────────────
 function renderEnd(gs, area) {
