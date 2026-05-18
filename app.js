@@ -123,7 +123,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 async function checkVersion() {
   try {
-    const response = await fetch(`/version.json?t=${Date.now()}`);
+    const response = await fetch(`version.json?t=${Date.now()}`);
     const data = await response.json();
     if (data.version && data.version !== APP_VERSION) {
       console.log(`Version Mismatch: Lokal ${APP_VERSION} vs Server ${data.version}`);
@@ -592,6 +592,7 @@ async function handleRound1Choice(choice, gs) {
     const deckCopy = [...gs.deck];
     const drawnCard = deckCopy.shift();
     const player = gs.players[myId];
+    if (!player) throw new Error("Spieler nicht gefunden");
     const hand = [...(player.hand || [])];
     const step = gs.currentRoundCard;
     let correct = false;
@@ -617,7 +618,7 @@ async function handleRound1Choice(choice, gs) {
     const newHand = [...hand, drawnCard];
 
     const updates = {};
-    updates[`lobbies/${lobbyId}/game/deck`] = deckCopy;
+    updates[`lobbies/${lobbyId}/game/deck`] = deckCopy || [];
     updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = newHand;
     
     if (!correct) {
@@ -645,10 +646,12 @@ async function handleRound1Choice(choice, gs) {
       if (firstGiverIdx !== -1) {
         updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
         updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = firstGiverIdx;
+        updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
       } else {
         // Niemand hat Schlucke zum Verteilen -> Prüfen ob jemand trinken muss
         let needsToDrink = false;
-        for (const pid of gs.playerOrder) {
+        const order = gs.playerOrder || [];
+        for (const pid of order) {
           const toDrink = (gs.players[pid].sipsToDrink || 0) + (pid === myId && !correct ? (step + 1) : 0);
           if (toDrink > 0) { needsToDrink = true; break; }
         }
@@ -658,7 +661,7 @@ async function handleRound1Choice(choice, gs) {
           updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = Date.now();
           
           const confirmed = {};
-          gs.playerOrder.forEach(pid => {
+          order.forEach(pid => {
             const sips = (updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] !== undefined)
               ? updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`]
               : (gs.players[pid].sipsToDrink || 0);
@@ -669,14 +672,15 @@ async function handleRound1Choice(choice, gs) {
           // Keiner verteilt, keiner trinkt -> Direkt zur nächsten Karte
           const nextCard = gs.currentRoundCard + 1;
           if (nextCard >= 4) updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
-          else updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextCard;
+          else {
+            updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextCard;
+            updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
+          }
         }
       }
-      updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
     } else {
       updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextPlayerIdx;
     }
-
     await update(ref(db), updates);
   } catch (e) {
     console.error(e);
@@ -776,49 +780,55 @@ async function checkNextDistributor(gs, updates) {
 
 async function confirmSips() {
   if (isProcessing || !lastGameState) return;
-  if (lastGameState.confirmedDrinkers && lastGameState.confirmedDrinkers[myId]) return;
+  const confirmedObj = lastGameState.confirmedDrinkers || {};
+  if (confirmedObj[myId]) return;
 
   isProcessing = true;
   try {
+    const totalPlayers = lastGameState.playerOrder.length;
+    
+    // Wir nutzen ein lokales Objekt für die Updates, um Race Conditions zu minimieren
     const updates = {};
-    const confirmedObj = lastGameState.confirmedDrinkers || {};
-    const currentlyConfirmedCount = Object.keys(confirmedObj).length;
-    const totalPlayers = Object.keys(lastGameState.players || {}).length;
-
     updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
+    updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
 
-    if (currentlyConfirmedCount + 1 >= totalPlayers) {
+    // Prüfen, ob ich der Letzte bin, der bestätigt
+    const currentConfirmedKeys = Object.keys(confirmedObj);
+    const isLastOne = (currentConfirmedKeys.length + 1 >= totalPlayers);
+
+    if (isLastOne) {
+      // Phase beenden
       updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
-      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null;
+      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = {}; // Reset für nächste Runde
       
       if (lastGameState.phase === 'round1') {
         const nextRoundCard = lastGameState.currentRoundCard + 1;
         if (nextRoundCard >= 4) {
           updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
+          updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
         } else {
           updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
           updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
         }
       } else if (lastGameState.phase === 'round2') {
-        if (lastGameState.pyramidIndex >= lastGameState.pyramidSize) {
-           await finishRound2(lastGameState, updates);
+        if (lastGameState.pyramidIndex >= (lastGameState.pyramidSize || 10)) {
+           // Spezialfall: Ende von Runde 2
+           await update(ref(db), updates); // Erst bestätigen
+           await finishRound2(lastGameState); 
+           isProcessing = false;
            return;
         }
       }
-      // Phase 3 benötigt kein spezielles Handling hier, da drinkingActive=false ausreicht
-    } else {
-      updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
     }
 
     await update(ref(db), updates);
   } catch (e) {
-    console.error(e);
+    console.error("ConfirmSips Error:", e);
     toast("Fehler bei der Bestätigung ❌");
   } finally {
     isProcessing = false;
   }
 }
-
 function manageDrinkingPopup(gs) {
   const modal = document.getElementById('drinking-modal');
   const mySips = gs.players[myId].sipsToDrink || 0;
@@ -1200,13 +1210,21 @@ async function autoLockMissedCards(gs) {
       }
     }
 
-    updates[`lobbies/${lobbyId}/game/matchEndTime`] = null;
-
     // Check if anyone has sips to distribute
     let firstGiverIdx = -1;
     for (let i = 0; i < gs.playerOrder.length; i++) {
       if ((gs.players[gs.playerOrder[i]].sipPool || 0) > 0) {
         firstGiverIdx = i; break;
+      }
+    }
+
+    // Calculate sips for newly locked cards and add to updates
+    for (const pid of gs.playerOrder) {
+      const playerHandInUpdates = updates[`lobbies/${lobbyId}/game/players/${pid}/hand`];
+      if (playerHandInUpdates) {
+        // Count cards that are now locked in playerHandInUpdates but were not locked in gs.players[pid].hand
+        const newlyLockedCount = playerHandInUpdates.filter(c => c.locked && !(gs.players[pid].hand || []).some(origC => origC.value === c.value && origC.suit === c.suit && origC.locked)).length;
+        if (newlyLockedCount > 0) updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] = (gs.players[pid].sipsToDrink || 0) + newlyLockedCount;
       }
     }
 
