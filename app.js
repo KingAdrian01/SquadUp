@@ -6,7 +6,7 @@ import { inject } from '@vercel/analytics';
 //  Full multiplayer via Firebase Realtime Database
 // ===================================================
 
-const APP_VERSION = '1.0.11'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '1.2.0'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -1134,6 +1134,11 @@ async function matchHandCard(cardIdx, gs) {
     } else {
       toast("❌ Falsch! Karte gesperrt.");
       card.locked = true;
+      if (gs.phase === 'round2') {
+        const sips = getSipsForRow(gs.pyramidIndex - 1, gs.pyramidSize);
+        updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = (gs.players[myId].sipsToDrink || 0) + sips;
+        updates[`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`] = (gs.players[myId].sipsTotal || 0) + sips;
+      }
     }
     
     updates[`lobbies/${lobbyId}/game/players/${myId}/hand`] = hand;
@@ -1220,7 +1225,12 @@ async function autoLockMissedCards(gs) {
       if (playerHandInUpdates) {
         // Count cards that are now locked in playerHandInUpdates but were not locked in gs.players[pid].hand
         const newlyLockedCount = playerHandInUpdates.filter(c => c.locked && !(gs.players[pid].hand || []).some(origC => origC.value === c.value && origC.suit === c.suit && origC.locked)).length;
-        if (newlyLockedCount > 0) updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] = (gs.players[pid].sipsToDrink || 0) + newlyLockedCount;
+        if (newlyLockedCount > 0) {
+          const sipsPerRow = gs.phase === 'round2' ? getSipsForRow(gs.pyramidIndex - 1, gs.pyramidSize) : 1;
+          const totalSips = newlyLockedCount * sipsPerRow;
+          updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] = (gs.players[pid].sipsToDrink || 0) + totalSips;
+          updates[`lobbies/${lobbyId}/game/players/${pid}/sipsTotal`] = (gs.players[pid].sipsTotal || 0) + totalSips;
+        }
       }
     }
 
