@@ -6,7 +6,7 @@ import { inject } from '@vercel/analytics';
 //  Full multiplayer via Firebase Realtime Database
 // ===================================================
 
-const APP_VERSION = '1.2.0'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '1.2.1'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -810,8 +810,12 @@ async function confirmSips() {
         updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
         await update(ref(db), updates);
       } else if (lastGameState.phase === 'round2') {
-        // Wenn Pyramide fertig, direkt finishRound2 mit den bestehenden updates aufrufen
-        await finishRound2(lastGameState, updates);
+        if (lastGameState.pyramidIndex >= lastGameState.pyramidSize) {
+          // Wenn Pyramide fertig, direkt finishRound2 mit den bestehenden updates aufrufen
+          await finishRound2(lastGameState, updates);
+        } else {
+          await update(ref(db), updates); // Nur die Schlucke bestätigen und weiter in Runde 2
+        }
       }
     } else {
       // Nur meinen eigenen Status bestätigen
