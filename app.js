@@ -6,7 +6,7 @@ import { inject } from '@vercel/analytics';
 //  Full multiplayer via Firebase Realtime Database
 // ===================================================
 
-const APP_VERSION = '1.0.3'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '1.0.4'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
