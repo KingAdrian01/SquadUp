@@ -6,7 +6,7 @@ import { inject } from '@vercel/analytics';
 //  Full multiplayer via Firebase Realtime Database
 // ===================================================
 
-const APP_VERSION = '1.0.4'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '1.0.11'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -779,7 +779,7 @@ async function checkNextDistributor(gs, updates) {
 }
 
 async function confirmSips() {
-  if (isProcessing || !lastGameState) return;
+  if (isProcessing || !lastGameState || !lobbyId) return;
   const confirmedObj = lastGameState.confirmedDrinkers || {};
   if (confirmedObj[myId]) return;
 
@@ -790,7 +790,6 @@ async function confirmSips() {
     // Wir nutzen ein lokales Objekt für die Updates, um Race Conditions zu minimieren
     const updates = {};
     updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
-    updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
 
     // Prüfen, ob ich der Letzte bin, der bestätigt
     const currentConfirmedKeys = Object.keys(confirmedObj);
@@ -799,29 +798,26 @@ async function confirmSips() {
     if (isLastOne) {
       // Phase beenden
       updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
-      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = {}; // Reset für nächste Runde
+      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null; // Node löschen statt leeres Objekt
       
       if (lastGameState.phase === 'round1') {
         const nextRoundCard = lastGameState.currentRoundCard + 1;
         if (nextRoundCard >= 4) {
           updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
-          updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
         } else {
           updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
-          updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
         }
+        updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
+        await update(ref(db), updates);
       } else if (lastGameState.phase === 'round2') {
-        if (lastGameState.pyramidIndex >= (lastGameState.pyramidSize || 10)) {
-           // Spezialfall: Ende von Runde 2
-           await update(ref(db), updates); // Erst bestätigen
-           await finishRound2(lastGameState); 
-           isProcessing = false;
-           return;
-        }
+        // Wenn Pyramide fertig, direkt finishRound2 mit den bestehenden updates aufrufen
+        await finishRound2(lastGameState, updates);
       }
+    } else {
+      // Nur meinen eigenen Status bestätigen
+      updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
+      await update(ref(db), updates);
     }
-
-    await update(ref(db), updates);
   } catch (e) {
     console.error("ConfirmSips Error:", e);
     toast("Fehler bei der Bestätigung ❌");
