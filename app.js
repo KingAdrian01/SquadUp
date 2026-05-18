@@ -6,6 +6,8 @@ import { inject } from '@vercel/analytics';
 //  Full multiplayer via Firebase Realtime Database
 // ===================================================
 
+const APP_VERSION = '1.0.2'; // Diese Version bei jedem wichtigen Update erhöhen
+
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
 const SUIT_NAMES = { '♥': 'Herz', '♦': 'Karo', '♠': 'Pik', '♣': 'Kreuz' };
@@ -98,7 +100,7 @@ function cardHTML(card, small = false, extra = '', idx = null) {
 
 // ── Lobby Code Gen ────────────────────────────────────────
 function genCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const chars = '1234567890';
   return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
@@ -116,12 +118,31 @@ window.addEventListener('DOMContentLoaded', async () => {
     setupHomeUI();
     injectSpeedInsights(); // Speed Insights hier initialisieren
     inject(); // Web Analytics hier initialisieren
+
+    // Prüfen, ob die App-Version noch aktuell ist
+    listenForUpdates();
+
     console.log("Firebase automatisch verbunden! 🔥");
   } catch (e) {
     console.error("Firebase Fehler:", e);
     toast('❌ Verbindung fehlgeschlagen');
   }
 });
+
+function listenForUpdates() {
+  if (!fbReady) return;
+  const versionRef = ref(db, 'app_settings/version');
+  onValue(versionRef, (snapshot) => {
+    const serverVersion = snapshot.val();
+    // Wenn eine Version in der DB steht und sie nicht meiner entspricht: Reload!
+    if (serverVersion && serverVersion !== APP_VERSION) {
+      toast("🚀 Neue Version verfügbar! Lade neu...");
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    }
+  });
+}
 
 function showFirebaseModal() {
   document.getElementById('firebase-modal').classList.add('active');
@@ -155,6 +176,10 @@ async function createLobby() {
   myName = nameInput;
   localStorage.setItem('bf_name', myName);
   isHost = true;
+
+  // Der Host setzt die "aktuelle" Version für alle anderen fest
+  update(ref(db, 'app_settings'), { version: APP_VERSION });
+
   lobbyId = genCode();
 
   const lobbyRef = ref(db, `lobbies/${lobbyId}`);
@@ -700,7 +725,7 @@ async function distributeSips(targetId, amount, gs) {
 }
 
 async function skipDistribution() {
-  if (isProcessing) return;
+  if (isProcessing || !lastGameState) return;
   isProcessing = true;
   try {
     const updates = {};
@@ -764,7 +789,7 @@ async function checkNextDistributor(gs, updates) {
 }
 
 async function confirmSips() {
-  if (!lastGameState || isProcessing) return;
+  if (isProcessing || !lastGameState) return;
   if (lastGameState.confirmedDrinkers && lastGameState.confirmedDrinkers[myId]) return;
 
   isProcessing = true;
@@ -1664,6 +1689,7 @@ function escHtml(str) {
 // Da app.js ein Modul ist, müssen Funktionen, die in HTML-Strings via onclick 
 // aufgerufen werden, explizit an das window-Objekt gebunden werden.
 window.confirmSips = confirmSips;
+window.leaveLobby = leaveLobby;
 window.skipDistribution = skipDistribution;
 window.readyUpRound2 = readyUpRound2;
 window.startPyramidDistribution = startPyramidDistribution;
