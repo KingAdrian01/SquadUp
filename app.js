@@ -6,7 +6,7 @@ import { inject } from '@vercel/analytics';
 //  Full multiplayer via Firebase Realtime Database
 // ===================================================
 
-const APP_VERSION = '1.0.2'; // Diese Version bei jedem wichtigen Update erhöhen
+const APP_VERSION = '1.0.3'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -50,7 +50,7 @@ const myConfig = {
 
 async function initFirebase(config) {
   const m = window._firebaseModules;
-  const app = m.initializeApp(config); // Kein Zeitstempel mehr nötig
+  const app = m.initializeApp(config); 
   db = m.getDatabase(app);
   ref = m.ref; set = m.set; get = m.get; push = m.push;
   onValue = m.onValue; update = m.update; remove = m.remove;
@@ -69,8 +69,8 @@ let lobbyId = null;
 let isHost = false;
 let unsubFns = [];
 let hostTimerInterval = null;
-let isProcessing = false; // Prevents double-clicks
-let pyramidSize = 6;
+let isProcessing = false; 
+let pyramidSize = 10;
 
 // ── Screens ──────────────────────────────────────────────
 function showScreen(id) {
@@ -107,21 +107,13 @@ function genCode() {
 // ── INIT ──────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   try {
-    // Startet direkt mit deiner festen Config von oben
+    await checkVersion(); 
     await initFirebase(myConfig);
-    
-    // Schließt das Modal sofort, falls es im HTML auf "active" steht
     const modal = document.getElementById('firebase-modal');
     if (modal) modal.classList.remove('active');
-    
-    // Startet die Home-Oberfläche
     setupHomeUI();
-    injectSpeedInsights(); // Speed Insights hier initialisieren
-    inject(); // Web Analytics hier initialisieren
-
-    // Prüfen, ob die App-Version noch aktuell ist
-    listenForUpdates();
-
+    injectSpeedInsights(); 
+    inject(); 
     console.log("Firebase automatisch verbunden! 🔥");
   } catch (e) {
     console.error("Firebase Fehler:", e);
@@ -129,19 +121,19 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-function listenForUpdates() {
-  if (!fbReady) return;
-  const versionRef = ref(db, 'app_settings/version');
-  onValue(versionRef, (snapshot) => {
-    const serverVersion = snapshot.val();
-    // Wenn eine Version in der DB steht und sie nicht meiner entspricht: Reload!
-    if (serverVersion && serverVersion !== APP_VERSION) {
-      toast("🚀 Neue Version verfügbar! Lade neu...");
+async function checkVersion() {
+  try {
+    const response = await fetch(`/version.json?t=${Date.now()}`);
+    const data = await response.json();
+    if (data.version && data.version !== APP_VERSION) {
+      console.log(`Version Mismatch: Lokal ${APP_VERSION} vs Server ${data.version}`);
       setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+        window.location.reload(true); 
+      }, 500);
     }
-  });
+  } catch (e) {
+    console.warn("Versions-Check fehlgeschlagen (evtl. offline)");
+  }
 }
 
 function showFirebaseModal() {
@@ -163,22 +155,18 @@ function setupHomeUI() {
   document.getElementById('input-name').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('input-code').focus();
   });
-
-  // Globaler Listener für den Trink-Bestätigungs-Button
   const confirmBtn = document.getElementById('btn-confirm-drinking');
   if (confirmBtn) confirmBtn.addEventListener('click', confirmSips);
 }
 
 // ── CREATE LOBBY ──────────────────────────────────────────
 async function createLobby() {
+  await checkVersion(); 
   const nameInput = document.getElementById('input-name').value.trim();
   if (!nameInput) { toast('Bitte Namen eingeben'); return; }
   myName = nameInput;
   localStorage.setItem('bf_name', myName);
   isHost = true;
-
-  // Der Host setzt die "aktuelle" Version für alle anderen fest
-  update(ref(db, 'app_settings'), { version: APP_VERSION });
 
   lobbyId = genCode();
 
@@ -186,13 +174,12 @@ async function createLobby() {
   await set(lobbyRef, {
     host: myId,
     status: 'waiting',
-    pyramidSize: 6,
+    pyramidSize: 10,
     players: {
       [myId]: { name: myName, id: myId, host: true, joinedAt: Date.now() }
     }
   });
 
-  // Auto-remove on disconnect
   onDisconnect(ref(db, `lobbies/${lobbyId}`)).remove();
 
   enterLobbyScreen();
@@ -200,6 +187,7 @@ async function createLobby() {
 
 // ── JOIN LOBBY ─────────────────────────────────────────────
 async function joinLobby() {
+  await checkVersion(); 
   const nameInput = document.getElementById('input-name').value.trim();
   const code = document.getElementById('input-code').value.trim().toUpperCase();
   if (!nameInput) { toast('Bitte Namen eingeben'); return; }
@@ -221,7 +209,7 @@ async function joinLobby() {
 
   onDisconnect(ref(db, `lobbies/${lobbyId}/players/${myId}`)).remove();
 
-  pyramidSize = lobby.pyramidSize || 6;
+  pyramidSize = lobby.pyramidSize || 10;
   enterLobbyScreen();
 }
 
@@ -364,10 +352,10 @@ async function startGame() {
     playerStates[p.id] = {
       id: p.id,
       name: p.name,
-      hand: [], // Start empty, filled during R1
+      hand: [], 
       drawnCards: [],
       readyForRound2: false,
-      sipPool: 0, // Schlucke, die man verteilen darf
+      sipPool: 0, 
       sipsToDrink: 0,
       sipsTotal: 0
     };
@@ -395,13 +383,13 @@ async function startGame() {
     players: playerStates,
     playerOrder: players.map(p => p.id),
     currentPlayerIndex: 0,
-    currentRoundCard: 0, // 0 bis 3 (für die 4 Karten)
+    currentRoundCard: 0, 
     matchingActive: false,
     drawnForCurrentPlayer: [],
     round1Done: false,
     pyramidIndex: 0,
     distributionActive: false,
-    distributionGiverIndex: 0, // Wer ist gerade beim Verteilen dran
+    distributionGiverIndex: 0, 
     drinkingActive: false,
     confirmedDrinkers: {},
     drinkingStartTime: 0,
@@ -643,12 +631,10 @@ async function handleRound1Choice(choice, gs) {
 
     const nextPlayerIdx = gs.currentPlayerIndex + 1;
     if (nextPlayerIdx >= gs.playerOrder.length) {
-      // Alle Spieler haben die aktuelle Karte gezogen -> Ersten Verteiler suchen
       let firstGiverIdx = -1;
       for (let i = 0; i < gs.playerOrder.length; i++) {
         const pid = gs.playerOrder[i];
         let pool = gs.players[pid].sipPool || 0;
-        // Wenn ich es bin, berechne den soeben gewonnenen Pool mit ein
         if (pid === myId && correct) pool += (step + 1);
         if (pool > 0) {
           firstGiverIdx = i;
@@ -1181,8 +1167,6 @@ async function startPyramidDistribution() {
       updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = firstGiverIdx;
       await update(ref(db), updates);
     } else {
-      // Niemand hat Schlucke -> checkNextDistributor prüft Trinken oder Phasenwechsel
-      // Wir fingieren einen GiverIndex von -1, damit checkNextDistributor bei 0 anfängt zu suchen
       await checkNextDistributor({ ...gs, distributionGiverIndex: -1 }, updates);
     }
   } catch (e) {
@@ -1562,7 +1546,7 @@ async function handleBusChoice(choice, gs) {
         [`lobbies/${lobbyId}/game/busCards`]: [],
         [`lobbies/${lobbyId}/game/busStep`]: 0,
         [`lobbies/${lobbyId}/game/takeOverRequest`]: null,
-        [`lobbies/${lobbyId}/game/guestDriverId`]: null // Standardmäßig zurück zum Hauptfahrer
+        [`lobbies/${lobbyId}/game/guestDriverId`]: null 
       };
 
       // Logik für den Wechsel:
@@ -1686,8 +1670,6 @@ function escHtml(str) {
 // ─ Pyramid size sync for non-host ──────────────────────────
 // Already handled in enterLobbyScreen
 
-// Da app.js ein Modul ist, müssen Funktionen, die in HTML-Strings via onclick 
-// aufgerufen werden, explizit an das window-Objekt gebunden werden.
 window.confirmSips = confirmSips;
 window.leaveLobby = leaveLobby;
 window.skipDistribution = skipDistribution;

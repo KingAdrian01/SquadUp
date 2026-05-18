@@ -257,6 +257,19 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 }
 .btn-icon:hover { color: var(--accent); border-color: var(--accent); }
 
+.copy-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.copy-text {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 /* ===== LOBBY ===== */
 .lobby-body {
   padding: 20px;
