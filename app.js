@@ -6,7 +6,7 @@ import { inject } from '@vercel/analytics';
 //  Full multiplayer via Firebase Realtime Database
 // ===================================================
 
-const APP_VERSION = '1.2.1'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '1.2.2'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -36,6 +36,12 @@ function shuffle(arr) {
 let db, ref, set, get, push, onValue, update, remove, onDisconnect;
 let fbReady = false;
 
+// Zeit-Synchronisation
+let serverOffset = 0;
+function getServerNow() {
+  return Date.now() + serverOffset;
+}
+
 // Deine festen Zugangsdaten
 const myConfig = {
   apiKey: "AIzaSyBXl_VNTyQ3zPFNn-93KQr3-GMI7Mqcq9w",
@@ -55,6 +61,12 @@ async function initFirebase(config) {
   ref = m.ref; set = m.set; get = m.get; push = m.push;
   onValue = m.onValue; update = m.update; remove = m.remove;
   onDisconnect = m.onDisconnect;
+
+  // Serverzeit-Offset abrufen
+  onValue(ref(db, ".info/serverTimeOffset"), (snap) => {
+    serverOffset = snap.val() || 0;
+  });
+
   fbReady = true;
 }
 
@@ -275,7 +287,7 @@ function enterLobbyScreen() {
     
     // Host check: Timer für Pyramiden-Karten abgelaufen?
     if (isHost && (game.phase === 'round2' || game.phase === 'tiebreaker') && 
-        game.matchEndTime && Date.now() > game.matchEndTime) {
+        game.matchEndTime && getServerNow() > game.matchEndTime) {
       autoLockMissedCards(game);
     }
 
@@ -419,7 +431,7 @@ function enterGameScreen() {
 
     // Host-Wiederherstellung: Falls der Timer nach einem Refresh fehlt
     if (isHost && (gs.phase === 'round2' || gs.phase === 'tiebreaker')) {
-      const now = Date.now();
+      const now = getServerNow();
       if (gs.matchEndTime && now < gs.matchEndTime && !hostTimerInterval) {
         const delay = (gs.matchEndTime - now) + 500;
         hostTimerInterval = setTimeout(() => autoLockMissedCards(lastGameState), delay);
@@ -658,7 +670,7 @@ async function handleRound1Choice(choice, gs) {
 
         if (needsToDrink) {
           updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
-          updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = Date.now();
+          updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = getServerNow();
           
           const confirmed = {};
           order.forEach(pid => {
@@ -752,7 +764,7 @@ async function checkNextDistributor(gs, updates) {
   updates[`lobbies/${lobbyId}/game/distributionActive`] = false;
   if (anyoneNeedsToDrink) {
   updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
-  updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = Date.now();
+  updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = getServerNow();
   const confirmed = {};
   gs.playerOrder.forEach(pid => {
     const sips = updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] !== undefined 
@@ -859,7 +871,7 @@ function renderRound2(gs, area) {
   const size = gs.pyramidSize;
   const pidx = gs.pyramidIndex;
   const matchEndTime = gs.matchEndTime || 0;
-  const timeLeft = Math.max(0, Math.ceil((matchEndTime - Date.now()) / 1000));
+  const timeLeft = Math.max(0, Math.ceil((matchEndTime - getServerNow()) / 1000));
 
   // Step 1: Prep phase - players must flip cards
   if (!gs.players[myId].readyForRound2) {
@@ -897,7 +909,7 @@ function renderRound2(gs, area) {
     for (let i = 0; i < rowSize; i++) {
       const card = pyramid[flatIdx];
       // Schimmer auf der zuletzt aufgedeckten Karte
-      const isCurrent = (flatIdx === pidx - 1 && (timeLeft > 0 || gs.distributionActive || gs.drinkingActive || (gs.matchEndTime && Date.now() < gs.matchEndTime + 500)));
+      const isCurrent = (flatIdx === pidx - 1 && (timeLeft > 0 || gs.distributionActive || gs.drinkingActive || (gs.matchEndTime && getServerNow() < gs.matchEndTime + 500)));
       const isDone = card.revealed || flatIdx < pidx;
       if (card.revealed) {
         html += `<div class="pyramid-card revealed ${cardColor(card.suit)} ${isCurrent ? 'current-reveal' : ''} ${flatIdx < pidx - 1 ? 'done' : ''}" data-idx="${flatIdx}">
@@ -998,7 +1010,7 @@ function renderRound2(gs, area) {
       window._lastMatchEndTime = matchEndTime;
       if (window._matchTicker) clearInterval(window._matchTicker);
       window._matchTicker = setInterval(() => {
-        const nowLeft = Math.max(0, Math.ceil((matchEndTime - Date.now()) / 1000));
+        const nowLeft = Math.max(0, Math.ceil((matchEndTime - getServerNow()) / 1000));
         const tEl = document.getElementById('match-timer');
         if (tEl) tEl.textContent = nowLeft + "s";
         if (nowLeft <= 0) {
@@ -1029,7 +1041,7 @@ function renderRound2(gs, area) {
 function renderTiebreaker(gs, area) {
   const card = gs.tiebreakerCard;
   const matchEndTime = gs.matchEndTime || 0;
-  const timeLeft = Math.max(0, Math.ceil((matchEndTime - Date.now()) / 1000));
+  const timeLeft = Math.max(0, Math.ceil((matchEndTime - getServerNow()) / 1000));
   
   let html = `<div class="pyramid-section">
     <div class="pyramid-title">🔥 STECHEN (PHASE 2.5)</div>
@@ -1059,7 +1071,7 @@ function renderTiebreaker(gs, area) {
       window._lastMatchEndTime = matchEndTime;
       if (window._matchTicker) clearInterval(window._matchTicker);
       window._matchTicker = setInterval(() => {
-        const nowLeft = Math.max(0, Math.ceil((matchEndTime - Date.now()) / 1000));
+        const nowLeft = Math.max(0, Math.ceil((matchEndTime - getServerNow()) / 1000));
         const tEl = document.getElementById('match-timer');
         if (tEl) tEl.textContent = nowLeft + "s";
         if (nowLeft <= 0) { clearInterval(window._matchTicker); window._matchTicker = null; renderGame(lastGameState); }
@@ -1107,7 +1119,7 @@ async function matchHandCard(cardIdx, gs) {
     return;
   }
 
-  if (gs.matchEndTime && Date.now() > gs.matchEndTime) {
+  if (gs.matchEndTime && getServerNow() > gs.matchEndTime) {
     toast("⌛ Zu spät!");
     return;
   }
@@ -1199,7 +1211,8 @@ async function autoLockMissedCards(gs) {
   try {
     const targetCard = gs.phase === 'round2' ? gs.pyramid[gs.pyramidIndex - 1] : gs.tiebreakerCard;
     const updates = {};
-    if (!targetCard) return;
+    updates[`lobbies/${lobbyId}/game/matchEndTime`] = null; // Timer sofort stoppen
+    if (!targetCard) { isProcessing = false; return; }
 
     for (const pid of gs.playerOrder) {
       const hand = [...(gs.players[pid].hand || [])];
@@ -1246,7 +1259,7 @@ async function autoLockMissedCards(gs) {
       let anyoneNeedsToDrink = gs.playerOrder.some(pid => (gs.players[pid].sipsToDrink || 0) > 0);
       if (anyoneNeedsToDrink) {
         updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
-        updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = Date.now();
+        updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = getServerNow();
         const confirmed = {};
         gs.playerOrder.forEach(pid => {
           const sips = (updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] !== undefined)
@@ -1279,13 +1292,13 @@ async function revealPyramidCard(gs) {
 
   updates[`lobbies/${lobbyId}/game/pyramid/${pidx}/revealed`] = true;
   updates[`lobbies/${lobbyId}/game/pyramidIndex`] = pidx + 1;
-  updates[`lobbies/${lobbyId}/game/matchEndTime`] = Date.now() + 10000;
+  updates[`lobbies/${lobbyId}/game/matchEndTime`] = getServerNow() + 10000;
 
   try {
     if (hostTimerInterval) clearTimeout(hostTimerInterval);
     hostTimerInterval = setTimeout(() => {
       autoLockMissedCards(lastGameState);
-    }, 10500);
+    }, 10000); // Exakt 10 Sekunden warten
 
     await update(ref(db), updates);
   } catch (e) {
@@ -1303,11 +1316,11 @@ async function revealTiebreakerCard() {
   const updates = {
     [`lobbies/${lobbyId}/game/deck`]: deck,
     [`lobbies/${lobbyId}/game/tiebreakerCard`]: card,
-    [`lobbies/${lobbyId}/game/matchEndTime`]: Date.now() + 10000
+    [`lobbies/${lobbyId}/game/matchEndTime`]: getServerNow() + 10000
   };
   
   if (hostTimerInterval) clearTimeout(hostTimerInterval);
-  hostTimerInterval = setTimeout(() => autoLockMissedCards(lastGameState), 10500);
+  hostTimerInterval = setTimeout(() => autoLockMissedCards(lastGameState), 10000);
   
   await update(ref(db), updates);
   isProcessing = false;
@@ -1569,7 +1582,7 @@ async function handleBusChoice(choice, gs) {
         [`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`]: sipsToDrink,
         [`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`]: sipsTotal,
         [`lobbies/${lobbyId}/game/drinkingActive`]: true,
-        [`lobbies/${lobbyId}/game/drinkingStartTime`]: Date.now(),
+        [`lobbies/${lobbyId}/game/drinkingStartTime`]: getServerNow(),
         [`lobbies/${lobbyId}/game/confirmedDrinkers`]: confirmed,
         [`lobbies/${lobbyId}/game/busCards`]: [],
         [`lobbies/${lobbyId}/game/busStep`]: 0,
