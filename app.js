@@ -1,3 +1,4 @@
+import { renderDrunterDrueber, initDDGame, checkDDCorrect } from './dd-logic.js';
 import { injectSpeedInsights } from '@vercel/speed-insights';
 import { inject } from '@vercel/analytics';
 
@@ -12,8 +13,8 @@ const APP_VERSION = '1.2.3'; // Muss mit der Version in version.json übereinsti
 const SUITS = ['♥','♦','♠','♣'];
 const SUIT_NAMES = { '♥': 'Herz', '♦': 'Karo', '♠': 'Pik', '♣': 'Kreuz' };
 const VALUES = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
-const VALUE_ORDER = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14 };
-
+export const VALUE_ORDER = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14 };
+export { cardHTML, escHtml, toast };
 function isRed(suit) { return suit === '♥' || suit === '♦'; }
 
 function cardColor(suit) { return isRed(suit) ? 'red' : 'black'; }
@@ -83,9 +84,17 @@ let unsubFns = [];
 let hostTimerInterval = null;
 let isProcessing = false; 
 let pyramidSize = 10;
+let selectedGameMode = 'busfahrer';
 
 // ── Screens ──────────────────────────────────────────────
+function hideAllModals() {
+  document.querySelectorAll('.modal-overlay').forEach(modal => {
+    modal.classList.remove('active');
+  });
+}
+
 function showScreen(id) {
+  hideAllModals(); // Alle Modals ausblenden, wenn ein neuer Bildschirm angezeigt wird
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + id).classList.add('active');
 }
@@ -117,7 +126,7 @@ function genCode() {
 }
 
 // ── INIT ──────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', async () => {
+async function initApp() {
   try {
     await checkVersion(); 
     await initFirebase(myConfig);
@@ -130,8 +139,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   } catch (e) {
     console.error("Firebase Fehler:", e);
     toast('❌ Verbindung fehlgeschlagen');
+    showFirebaseModal(); // Firebase-Modal anzeigen, wenn die Initialisierung fehlschlägt
   }
-});
+}
+initApp();
 
 async function checkVersion() {
   try {
@@ -158,6 +169,44 @@ function setupHomeUI() {
   // Restore name
   const savedName = localStorage.getItem('bf_name');
   if (savedName) document.getElementById('input-name').value = savedName;
+
+  // Mode Switchers
+  const modeSelects = [
+    document.getElementById('mode-select-lobby'),
+    document.getElementById('mode-select-game')
+  ];
+
+  // Initialisiere Dropdowns mit Standardwert
+  modeSelects.forEach(s => { if(s) s.value = selectedGameMode; });
+
+  modeSelects.forEach(select => {
+    if (!select) return;
+    select.addEventListener('change', async () => {
+      if (lobbyId && lastGameState && lastGameState.phase !== 'end' && lastGameState.phase !== 'waiting') {
+        toast("Modus-Wechsel während des Spiels nicht möglich ❌");
+        select.value = selectedGameMode;
+        return;
+      }
+      const newMode = select.value;
+      if (lobbyId && isHost) {
+        try {
+          await update(ref(db, `lobbies/${lobbyId}`), { gameType: newMode });
+          toast("Spielmodus geändert 🔄");
+        } catch (e) {
+          console.error("Error updating game mode:", e);
+          toast("Fehler beim Ändern des Spielmodus ❌");
+          // Revert UI if update fails
+          select.value = selectedGameMode;
+        }
+      } else if (lobbyId && !isHost) {
+        select.value = selectedGameMode; // Revert to current lobby mode
+        toast("Nur der Host kann den Spielmodus ändern.", 3000);
+      } else {
+        // Not in a lobby, update local selectedGameMode
+        selectedGameMode = newMode;
+      }
+    });
+  });
 
   document.getElementById('btn-create').addEventListener('click', createLobby);
   document.getElementById('btn-join').addEventListener('click', joinLobby);
@@ -186,6 +235,7 @@ async function createLobby() {
   await set(lobbyRef, {
     host: myId,
     status: 'waiting',
+    gameType: selectedGameMode,
     pyramidSize: 10,
     players: {
       [myId]: { name: myName, id: myId, host: true, joinedAt: Date.now() }
@@ -213,6 +263,7 @@ async function joinLobby() {
   const lobby = snap.val();
   if (lobby.status !== 'waiting') { toast('Spiel läuft bereits'); return; }
 
+  selectedGameMode = lobby.gameType || 'busfahrer';
   isHost = false;
   lobbyId = code;
   await set(ref(db, `lobbies/${lobbyId}/players/${myId}`), {
@@ -230,13 +281,40 @@ function enterLobbyScreen() {
   showScreen('lobby');
   document.getElementById('lobby-code-display').textContent = lobbyId;
 
-  // Copy button
-  document.getElementById('btn-copy-code').onclick = () => {
+  // Modus-Wechsler für Host aktivieren, für andere sperren
+  const modeSelectLobby = document.getElementById('mode-select-lobby');
+  if (modeSelectLobby) modeSelectLobby.disabled = !isHost;
+
+  // Copy code on click
+  document.getElementById('lobby-code-display').onclick = () => {
     navigator.clipboard?.writeText(lobbyId).then(() => toast('Code kopiert! ' + lobbyId));
   };
 
   // Leave
   document.getElementById('btn-leave-lobby').onclick = leaveLobby;
+
+  // Listen for mode changes in Lobby
+  const typeRef = ref(db, `lobbies/${lobbyId}/gameType`);
+  const unsubType = onValue(typeRef, snap => {
+    if (snap.exists()) {
+      selectedGameMode = snap.val();
+      document.getElementById('mode-select-lobby').value = selectedGameMode;
+      document.getElementById('mode-select-game').value = selectedGameMode;
+
+      // Pyramidenselektor Sichtbarkeit live anpassen
+      const pyramidSel = document.getElementById('pyramid-selector');
+      if (pyramidSel) {
+        pyramidSel.style.display = (isHost && selectedGameMode === 'busfahrer') ? '' : 'none';
+      }
+
+      // UI Update für Start-Button
+      const startBtn = document.getElementById('btn-start-game');
+      if (isHost && startBtn) {
+        startBtn.textContent = selectedGameMode === 'busfahrer' ? 'Spiel starten 🚌' : 'Spiel starten 🃏';
+      }
+    }
+  });
+  unsubFns.push(unsubType);
 
   // Pyramid selector (host only)
   const pyramidSel = document.getElementById('pyramid-selector');
@@ -250,16 +328,16 @@ function enterLobbyScreen() {
         update(ref(db, `lobbies/${lobbyId}`), { pyramidSize });
       });
     });
-  } else {
-    pyramidSel.style.display = 'none';
   }
+  // Initiale Sichtbarkeit setzen
+  if (pyramidSel) pyramidSel.style.display = (isHost && selectedGameMode === 'busfahrer') ? '' : 'none';
 
   // Start button
   const startBtn = document.getElementById('btn-start-game');
   const waitingMsg = document.getElementById('waiting-msg');
   if (isHost) {
     startBtn.style.display = '';
-    waitingMsg.style.display = 'none';
+    startBtn.textContent = selectedGameMode === 'busfahrer' ? 'Spiel starten 🚌' : 'Spiel starten 🃏';
     startBtn.addEventListener('click', startGame);
   } else {
     startBtn.style.display = 'none';
@@ -291,7 +369,7 @@ function enterLobbyScreen() {
       autoLockMissedCards(game);
     }
 
-      if (game.phase === 'round1') {
+      if (game.phase === 'round1' || game.phase === 'playing') {
         unsubFns.forEach(f => f());
         unsubFns = [];
         enterGameScreen();
@@ -373,6 +451,17 @@ async function startGame() {
     };
   }
 
+  if (selectedGameMode === 'drunterdrueber') {
+    const ddState = await initDDGame(players, deck);
+    await set(ref(db, `lobbies/${lobbyId}/game`), ddState);
+    return;
+  }
+
+  // Lobby-Status auf 'playing' setzen, um weitere Beitritte zu verhindern
+  const lobbyUpdate = {};
+  lobbyUpdate[`lobbies/${lobbyId}/status`] = 'playing';
+  await update(ref(db), lobbyUpdate);
+
   // Build pyramid with unique values
   const pyrCards = [];
   const usedValues = new Set();
@@ -388,6 +477,7 @@ async function startGame() {
   }
 
   const gameState = {
+    gameType: 'busfahrer',
     phase: 'round1',
     pyramidSize,
     deck: remainingDeck,
@@ -421,9 +511,28 @@ let lastGameState = null;
 
 function enterGameScreen() {
   showScreen('game');
+
+  // Während des Spiels den Modus-Wechsler für alle deaktivieren
+  const modeSelectGame = document.getElementById('mode-select-game');
+  if (modeSelectGame) modeSelectGame.disabled = true;
+
+  // Zurück-Button Logik im Spiel
+  document.getElementById('btn-back-game').onclick = async () => {
+    if (isHost) {
+      if (confirm("Spiel abbrechen und zur Lobby zurückkehren?")) {
+        await remove(ref(db, `lobbies/${lobbyId}/game`));
+      }
+    } else {
+      leaveLobby();
+    }
+  };
+
   gameListener = onValue(ref(db, `lobbies/${lobbyId}/game`), snap => {
     if (!snap.exists()) {
-      if (lobbyId) leaveLobby();
+      if (lobbyId) {
+        if (gameListener) { gameListener(); gameListener = null; }
+        enterLobbyScreen();
+      }
       return;
     }
     const gs = snap.val();
@@ -442,11 +551,166 @@ function enterGameScreen() {
   });
 }
 
+// ── DRUNTER & DRÜBER ACTIONS ─────────────────────────────
+function animateSipsToPool(count) {
+  const sourceEl = document.querySelector('.choice-buttons');
+  const targetEl = document.getElementById('sip-pool-target') || document.querySelector('.current-player-badge');
+  if (!sourceEl || !targetEl) return;
+
+  const sourceRect = sourceEl.getBoundingClientRect();
+  const targetRect = targetEl.getBoundingClientRect();
+
+  for (let i = 0; i < count; i++) {
+    const sip = document.createElement('div');
+    sip.className = 'flying-sip';
+    sip.textContent = '🍺';
+    sip.style.left = `${sourceRect.left + sourceRect.width / 2 - 15}px`;
+    sip.style.top = `${sourceRect.top}px`;
+    document.body.appendChild(sip);
+
+    setTimeout(() => {
+      sip.style.left = `${targetRect.left}px`;
+      sip.style.top = `${targetRect.top}px`;
+      sip.style.transform = 'scale(0.4) rotate(720deg)';
+      sip.style.opacity = '0';
+    }, 50 + i * 150);
+
+    setTimeout(() => sip.remove(), 1000 + i * 150);
+  }
+}
+
+window.selectDDRow = (idx) => {
+  update(ref(db, `lobbies/${lobbyId}/game`), { selectedRowIndex: idx, selectedSide: null });
+};
+
+window.selectDDSide = (side) => {
+  update(ref(db, `lobbies/${lobbyId}/game`), { selectedSide: side });
+};
+
+window.handleDDChoice = async (choice) => {
+  if (isProcessing || !lastGameState) return;
+  isProcessing = true;
+  try {
+    const gs = lastGameState;
+    const rowIdx = gs.selectedRowIndex;
+    const side = gs.selectedSide;
+    const deck = [...gs.deck];
+    const drawnCard = deck.shift();
+    const row = { ...gs.rows[rowIdx] };
+    if (!row.left) row.left = [];
+    if (!row.right) row.right = [];
+    
+    const compareCard = (side === 'left') 
+      ? (row.left.length > 0 ? row.left[row.left.length - 1] : row.pivot)
+      : (row.right.length > 0 ? row.right[row.right.length - 1] : row.pivot);
+      
+    const correct = checkDDCorrect(choice, compareCard, drawnCard);
+    
+    if (side === 'left') row.left = [...row.left, drawnCard];
+    else row.right = [...row.right, drawnCard];
+    
+    const updates = {};
+    updates[`lobbies/${lobbyId}/game/deck`] = deck;
+    updates[`lobbies/${lobbyId}/game/rows/${rowIdx}`] = row;
+    updates[`lobbies/${lobbyId}/game/turnStarted`] = true;
+    updates[`lobbies/${lobbyId}/game/selectedSide`] = null; // Zwingt zur Neuwahl der Seite nach JEDEM Tipp
+
+    if (correct) {
+      const newStreak = gs.currentStreak + 1;
+      updates[`lobbies/${lobbyId}/game/currentStreak`] = newStreak;
+      toast("✅ Richtig!");
+      
+      if (newStreak >= 4) {
+        const bonus = newStreak - 3;
+        animateSipsToPool(bonus);
+        updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = (gs.players[myId].sipPool || 0) + bonus;
+        toast(`✅ Richtig! ${bonus} Schluck${bonus > 1 ? 'e' : ''} zum Verteilen gesammelt.`);
+      }
+    } else {
+      const penalty = (row.left?.length || 0) + 1 + (row.right?.length || 0);
+      toast(`❌ Falsch! Trink ${penalty} Schlucke!`);
+      updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = (gs.players[myId].sipsToDrink || 0) + penalty;
+      updates[`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`] = (gs.players[myId].sipsTotal || 0) + penalty;
+      updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
+      updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = getServerNow();
+      
+      // Zug beenden
+      updates[`lobbies/${lobbyId}/game/rows/${rowIdx}`] = { pivot: drawnCard, left: [], right: [] };
+      const nextIdx = (gs.currentPlayerIndex + 1) % gs.playerOrder.length;
+      updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextIdx;
+      updates[`lobbies/${lobbyId}/game/currentStreak`] = 0;
+      updates[`lobbies/${lobbyId}/game/turnStarted`] = false;
+      updates[`lobbies/${lobbyId}/game/selectedRowIndex`] = -1;
+      updates[`lobbies/${lobbyId}/game/selectedSide`] = null;
+      
+      const confirmed = {};
+      gs.playerOrder.forEach(pid => { if(pid !== myId) confirmed[pid] = true; });
+      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
+    }
+
+    await update(ref(db), updates);
+  } catch (e) {
+    console.error("Error in handleDDChoice:", e);
+    toast("Ein Fehler ist aufgetreten 🤯");
+  } finally {
+    isProcessing = false;
+  }
+};
+
+window.passDDTurn = async () => {
+  if (isProcessing || !lastGameState) return;
+  isProcessing = true;
+  try {
+    const gs = lastGameState;
+    const updates = {};
+
+    if ((gs.players[myId]?.sipPool || 0) > 0) {
+      // Wenn Schlucke im Pool sind, starte die Verteilung
+      updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
+      updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = gs.currentPlayerIndex;
+    } else {
+      // Keine Schlucke zu verteilen, gehe zum nächsten Spieler
+      const nextIdx = (gs.currentPlayerIndex + 1) % gs.playerOrder.length;
+      updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextIdx;
+    }
+    // Allgemeine Resets für den Zug
+    updates[`lobbies/${lobbyId}/game/currentStreak`] = 0;
+    updates[`lobbies/${lobbyId}/game/turnStarted`] = false;
+    updates[`lobbies/${lobbyId}/game/selectedRowIndex`] = -1;
+    updates[`lobbies/${lobbyId}/game/selectedSide`] = null;
+    
+    await update(ref(db), updates);
+    toast("💰 Zug sicher beendet.");
+  } catch (e) {
+    console.error("Error in passDDTurn:", e);
+    toast("Fehler beim Beenden des Zuges ❌");
+  } finally {
+    isProcessing = false;
+  }
+}
+
 function renderGame(gs) {
   const area = document.getElementById('game-area');
   const phaseBadge = document.getElementById('phase-badge');
   const cpBadge = document.getElementById('current-player-badge');
   const progress = document.getElementById('round-progress');
+
+  // Handle drinking popup für alle Spielmodi (muss vor dem return stehen!)
+  manageDrinkingPopup(gs);
+
+  // Sicherheitscheck falls phase-badge fehlt (verhindert dark screen)
+  if (!phaseBadge) return; 
+
+  if (gs.gameType === 'drunterdrueber' || gs.phase === 'playing') {
+    phaseBadge.textContent = 'Drunter & Drüber';
+    try {
+      renderDrunterDrueber(gs, area, myId);
+    } catch (error) {
+      console.error("Error rendering Drunter & Drüber:", error);
+      area.innerHTML = `<div class="info-box highlight-border">Ein Fehler ist aufgetreten: ${error.message}. Bitte Konsole prüfen.</div>`;
+    }
+    return;
+  }
 
   // Check if everyone is ready for Round 2
   if (gs.phase === 'round2' && !gs.matchingActive && !gs.distributionActive && !gs.drinkingActive) {
@@ -455,9 +719,6 @@ function renderGame(gs) {
       // Auto-start first card reveal possible
     }
   }
-
-  // Handle drinking popup
-  manageDrinkingPopup(gs);
 
   if (gs.phase === 'round1') {
     phaseBadge.textContent = 'Runde 1 – Kartenziehen';
@@ -762,20 +1023,27 @@ async function checkNextDistributor(gs, updates) {
   }
 
   updates[`lobbies/${lobbyId}/game/distributionActive`] = false;
+
+  // Drunter & Drüber: Der Zug endet IMMER nach der Verteilung
+  if (gs.gameType === 'drunterdrueber') {
+    const nextIdx = (gs.currentPlayerIndex + 1) % gs.playerOrder.length;
+    updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextIdx;
+  }
+
   if (anyoneNeedsToDrink) {
-  updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
-  updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = getServerNow();
-  const confirmed = {};
-  gs.playerOrder.forEach(pid => {
-    const sips = updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] !== undefined 
-      ? updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] 
-      : (gs.players[pid].sipsToDrink || 0);
-    if (sips === 0) confirmed[pid] = true;
-  });
-  updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
+    updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
+    updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = getServerNow();
+    const confirmed = {};
+    gs.playerOrder.forEach(pid => {
+      const sips = updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] !== undefined 
+        ? updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] 
+        : (gs.players[pid].sipsToDrink || 0);
+      if (sips === 0) confirmed[pid] = true;
+    });
+    updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
   } else {
     // Skip drinking phase
-    if (gs.phase === 'round1') {
+    if (gs.gameType !== 'drunterdrueber' && gs.phase === 'round1') {
       const nextRoundCard = gs.currentRoundCard + 1;
       if (nextRoundCard >= 4) updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
       else {
@@ -1718,3 +1986,4 @@ window.revealPyramidCard = revealPyramidCard;
 window.revealTiebreakerCard = revealTiebreakerCard;
 window.requestBusTakeOver = requestBusTakeOver;
 window.respondToBusTakeOver = respondToBusTakeOver;
+window.distributeSips = distributeSips;

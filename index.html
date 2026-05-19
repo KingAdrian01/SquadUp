@@ -49,7 +49,9 @@
         <h1 class="logo">SQUADUP</h1>
         <div class="logo-tagline">More coming soon </div>
       </div>
-      <div class="home-form">
+
+      <!-- Name & Lobby Setup -->
+      <div id="lobby-setup" class="home-form">
         <input type="text" id="input-name" placeholder="dein echter Name" maxlength="16" autocomplete="off" />
         <button class="btn btn-primary" id="btn-create">Lobby erstellen</button>
         <div class="divider"><span>oder</span></div>
@@ -64,17 +66,17 @@
   <!-- ===== SCREEN: LOBBY ===== -->
   <div id="screen-lobby" class="screen">
     <div class="screen-header">
+      <select class="mode-switcher-select" id="mode-select-lobby">
+        <option value="busfahrer">Busfahrer</option>
+        <option value="drunterdrueber">Drunter & Drüber</option>
+      </select>
       <button class="btn-back" id="btn-leave-lobby">←</button>
-      <div class="header-info">
-        <span class="header-title">Lobby</span>
-        <span class="lobby-code-display" id="lobby-code-display"></span>
-      </div>
-      <div class="copy-container">
-        <span class="copy-text">Code kopieren</span>
-        <button class="btn-icon" id="btn-copy-code" title="Code kopieren">⧉</button>
-      </div>
     </div>
     <div class="lobby-body">
+      <div class="lobby-code-banner">
+        <div class="code-label">Lobby-Code</div>
+        <div class="code-value" id="lobby-code-display">000000</div>
+      </div>
       <div class="pyramid-selector" id="pyramid-selector">
         <div class="selector-label">Pyramidengröße</div>
         <div class="selector-pills">
@@ -94,9 +96,16 @@
   <div id="screen-game" class="screen">
     <!-- Phase indicator -->
     <div class="game-header">
-      <div class="phase-badge" id="phase-badge">Runde 1</div>
-      <div class="current-player-badge" id="current-player-badge"></div>
-      <div class="round-progress" id="round-progress"></div>
+      <select class="mode-switcher-select" id="mode-select-game">
+        <option value="busfahrer">Busfahrer</option>
+        <option value="drunterdrueber">Drunter & Drüber</option>
+      </select>
+      <div class="game-header-status">
+        <div id="phase-badge" style="display:none"></div>
+        <div class="current-player-badge" id="current-player-badge"></div>
+        <div class="round-progress" id="round-progress"></div>
+      </div>
+      <button class="btn-back" id="btn-back-game">←</button>
     </div>
 
     <!-- Main game area -->
