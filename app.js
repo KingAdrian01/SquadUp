@@ -178,7 +178,8 @@ async function checkVersion() {
     if (data.version && data.version !== APP_VERSION) {
       console.log(`Version Mismatch: Lokal ${APP_VERSION} vs Server ${data.version}`);
       setTimeout(() => {
-        window.location.reload(true); 
+        // Hard-Reload erzwingen durch Query-Parameter (Cache-Busting)
+        window.location.href = window.location.pathname + '?v=' + Date.now();
       }, 500);
     }
   } catch (e) {

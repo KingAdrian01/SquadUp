@@ -2,7 +2,7 @@
   "name": "SquadUp",
   "short_name": "SquadUp",
   "description": "Das Trinkkartenspiel SquadUp – spiel mit Freunden!",
-  "start_url": "/index.html",
+  "start_url": ".",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a0a0f",
