@@ -8,7 +8,7 @@ import { inject } from '@vercel/analytics';
 // ===================================================
 
 const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; // 2 Minuten Puffer
-const APP_VERSION = '2.1.1'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '2.1.3'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -173,14 +173,22 @@ initApp();
 
 async function checkVersion() {
   try {
+    // Verhindert Endlosschleifen: Wenn wir bereits durch einen Versions-Check
+    // neu geladen haben (erkennbar am ?v=), führen wir keinen weiteren Reload durch.
+    if (window.location.search.includes('v=')) {
+      // Nach 2 Sekunden säubern wir die URL wieder (sieht schöner aus)
+      setTimeout(() => {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }, 2000);
+      return;
+    }
+
     const response = await fetch(`version.json?t=${Date.now()}`);
     const data = await response.json();
     if (data.version && data.version !== APP_VERSION) {
       console.log(`Version Mismatch: Lokal ${APP_VERSION} vs Server ${data.version}`);
-      setTimeout(() => {
-        // Hard-Reload erzwingen durch Query-Parameter (Cache-Busting)
-        window.location.href = window.location.pathname + '?v=' + Date.now();
-      }, 500);
+      // Hard-Reload erzwingen durch Query-Parameter (Cache-Busting)
+      window.location.href = window.location.pathname + '?v=' + Date.now();
     }
   } catch (e) {
     console.warn("Versions-Check fehlgeschlagen (evtl. offline)");
