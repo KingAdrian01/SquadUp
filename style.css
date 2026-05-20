@@ -129,6 +129,21 @@ html, body {
   margin-top: 6px;
 }
 
+.conn-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 15px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+}
+.conn-status.connecting {
+  color: var(--accent);
+  animation: pulse 1.5s infinite;
+}
+.conn-status.ready { color: var(--green); opacity: 0.7; }
+.conn-status.error { color: var(--red); }
+
 .home-form {
   display: flex;
   flex-direction: column;

@@ -8,7 +8,7 @@ import { inject } from '@vercel/analytics';
 // ===================================================
 
 const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; // 2 Minuten Puffer
-const APP_VERSION = '2.1.0'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '2.1.1'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -129,25 +129,46 @@ function genCode() {
 
 // ── INIT ──────────────────────────────────────────────────
 async function initApp() {
-  // 1. Zuerst die UI aufbauen, damit Event-Listener sofort aktiv sind
+  // 1. Zuerst die UI aufbauen
   setupHomeUI();
   injectSpeedInsights(); 
   inject(); 
 
-  try {
-    // 2. Netzwerk-Tasks parallel/hintergrund starten statt alles nacheinander zu blocken
-    checkVersion(); 
-    await initFirebase(myConfig);
-    
-    const modal = document.getElementById('firebase-modal');
-    if (modal) modal.classList.remove('active');
-    console.log("Firebase automatisch verbunden! 🔥");
-  } catch (e) {
-    console.error("Firebase Fehler:", e);
-    toast('❌ Verbindung fehlgeschlagen');
-    showFirebaseModal(); // Firebase-Modal anzeigen, wenn die Initialisierung fehlschlägt
+  const statusEl = document.getElementById('connection-status');
+  if (statusEl) {
+    statusEl.textContent = "Verbinde mit Server...";
+    statusEl.classList.add('connecting');
   }
+
+  try {
+    // Firebase-Initialisierung
+    initFirebase(myConfig).then(() => {
+      const modal = document.getElementById('firebase-modal');
+      if (modal) modal.classList.remove('active');
+      
+      if (statusEl) {
+        statusEl.textContent = "Bereit";
+        statusEl.classList.remove('connecting');
+        statusEl.classList.add('ready');
+        setTimeout(() => { statusEl.style.opacity = "0"; }, 2000);
+      }
+    }).catch(e => {
+      console.error("Firebase Fehler:", e);
+      if (statusEl) {
+        statusEl.textContent = "Verbindungsfehler";
+        statusEl.classList.remove('connecting');
+        statusEl.classList.add('error');
+      }
+      showFirebaseModal();
+    });
+    
+    checkVersion(); 
+  } catch (error) {
+    // Hier werden Fehler abgefangen, die im try-Block (nicht in den Promises) passieren
+    console.error("Initialisierungsfehler:", error);
+  } // <--- Diese Klammer und der catch-Block haben gefehlt
 }
+
 initApp();
 
 async function checkVersion() {
