@@ -8,7 +8,7 @@ import { inject } from '@vercel/analytics';
 // ===================================================
 
 const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; // 2 Minuten Puffer
-const APP_VERSION = '2.1.4'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '2.1.5'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -147,6 +147,15 @@ function genCode() {
 
 // ── INIT ──────────────────────────────────────────────────
 async function initApp() {
+  // 0. Sofortiger Versions-Check bevor die App "lebt"
+  // Wir warten auf diesen Check, um einen "Zombie-Ladevorgang" zu verhindern.
+  const updateTriggered = await checkVersion();
+  if (updateTriggered) {
+    const statusEl = document.getElementById('connection-status');
+    if (statusEl) statusEl.textContent = "Update wird geladen...";
+    return; // Initialisierung abbrechen, da die Seite neu lädt
+  }
+
   try {
     // 1. Zuerst die UI aufbauen
     setupHomeUI();
@@ -183,9 +192,6 @@ async function initApp() {
       }
       showFirebaseModal();
     });
-    
-    // Versions-Check leicht verzögern, um Safari nicht beim ersten Render zu stören
-    setTimeout(checkVersion, 1500); 
   } catch (error) {
     console.error("Initialisierungsfehler:", error);
   }
@@ -200,25 +206,33 @@ if (document.readyState === 'loading') {
 
 async function checkVersion() {
   try {
-    // Verhindert Endlosschleifen: Wenn wir bereits durch einen Versions-Check
-    // neu geladen haben (erkennbar am ?v=), führen wir keinen weiteren Reload durch.
-    if (window.location.search.includes('v=')) {
-      // Nach 2 Sekunden säubern wir die URL wieder (sieht schöner aus)
+    const urlParams = new URLSearchParams(window.location.search);
+    const versionInUrl = urlParams.get('v');
+
+    const response = await fetch(`version.json?t=${Date.now()}`, { cache: "no-store" });
+    const data = await response.json();
+
+    if (data.version && data.version !== APP_VERSION) {
+      // Nur neu laden, wenn wir nicht GERADE erst durch genau DIESE Version neu geladen wurden
+      if (versionInUrl !== data.version) {
+        console.log(`Update gefunden: ${APP_VERSION} -> ${data.version}`);
+        // location.replace ist besser für Safari, da es die History nicht mit "toten" Seiten füllt
+        window.location.replace(window.location.pathname + '?v=' + data.version);
+        return true;
+      }
+    }
+    
+    // Wenn wir hier landen und ein 'v' in der URL haben, sind wir aktuell.
+    // Wir säubern die URL für die Ästhetik.
+    if (versionInUrl) {
       setTimeout(() => {
         window.history.replaceState({}, document.title, window.location.pathname);
-      }, 2000);
-      return;
+      }, 1000);
     }
-
-    const response = await fetch(`version.json?t=${Date.now()}`);
-    const data = await response.json();
-    if (data.version && data.version !== APP_VERSION) {
-      console.log(`Version Mismatch: Lokal ${APP_VERSION} vs Server ${data.version}`);
-      // Hard-Reload erzwingen durch Query-Parameter (Cache-Busting)
-      window.location.href = window.location.pathname + '?v=' + Date.now();
-    }
+    return false;
   } catch (e) {
     console.warn("Versions-Check fehlgeschlagen (evtl. offline)");
+    return false;
   }
 }
 
