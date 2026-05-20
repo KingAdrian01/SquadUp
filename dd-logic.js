@@ -85,6 +85,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
               <button class="choice-btn" onclick="window.selectDDSide('left')"><span class="choice-emoji">⬅️</span>Links</button>
               <button class="choice-btn" onclick="window.selectDDSide('right')"><span class="choice-emoji">➡️</span>Rechts</button>
             </div>
+            ${gs.currentStreak >= 3 ? `<button class="btn btn-secondary btn-large" style="margin-top:10px;" onclick="window.passDDTurn()">💰 Zug sicher beenden</button>` : ''}
           </div>`;
       } else {
         const row = gs.rows[gs.selectedRowIndex];
@@ -103,7 +104,6 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
             <button class="choice-btn" onclick="window.handleDDChoice('under')"><span class="choice-emoji">⬇️</span>Drunter</button>
           </div>
           <button class="btn btn-link" onclick="window.selectDDSide(null)" style="margin-top:10px">🔙 Seite ändern</button>
-          ${gs.currentStreak >= 3 ? `<button class="btn btn-secondary btn-large" style="margin-top:15px;" onclick="window.passDDTurn()">💰 Zug sicher beenden</button>` : ''}
         </div>`;
       }
     }

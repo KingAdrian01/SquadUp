@@ -7,6 +7,7 @@ import { inject } from '@vercel/analytics';
 //  Full multiplayer via Firebase Realtime Database
 // ===================================================
 
+const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; // 2 Minuten Puffer
 const APP_VERSION = '1.2.3'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
@@ -81,6 +82,7 @@ if (!myId) {
 let lobbyId = null;
 let isHost = false;
 let unsubFns = [];
+let hostCleanupInterval = null;
 let hostTimerInterval = null;
 let isProcessing = false; 
 let pyramidSize = 10;
@@ -127,14 +129,18 @@ function genCode() {
 
 // ── INIT ──────────────────────────────────────────────────
 async function initApp() {
+  // 1. Zuerst die UI aufbauen, damit Event-Listener sofort aktiv sind
+  setupHomeUI();
+  injectSpeedInsights(); 
+  inject(); 
+
   try {
-    await checkVersion(); 
+    // 2. Netzwerk-Tasks parallel/hintergrund starten statt alles nacheinander zu blocken
+    checkVersion(); 
     await initFirebase(myConfig);
+    
     const modal = document.getElementById('firebase-modal');
     if (modal) modal.classList.remove('active');
-    setupHomeUI();
-    injectSpeedInsights(); 
-    inject(); 
     console.log("Firebase automatisch verbunden! 🔥");
   } catch (e) {
     console.error("Firebase Fehler:", e);
@@ -164,49 +170,96 @@ function showFirebaseModal() {
 }
 
 function setupHomeUI() {
+  // Verhindert mehrfache Zuweisung falls setupHomeUI öfter aufgerufen wird
+  if (document.body.dataset.uiReady === 'true') return;
+  
   showScreen('home');
 
   // Restore name
   const savedName = localStorage.getItem('bf_name');
   if (savedName) document.getElementById('input-name').value = savedName;
 
-  // Mode Switchers
-  const modeSelects = [
-    document.getElementById('mode-select-lobby'),
-    document.getElementById('mode-select-game')
-  ];
+  // QR-Code / Einladungslink Check
+  const urlParams = new URLSearchParams(window.location.search);
+  const joinCode = urlParams.get('join');
+  if (joinCode) {
+    const codeInput = document.getElementById('input-code');
+    const nameInput = document.getElementById('input-name');
+    const createBtn = document.getElementById('btn-create');
+    const divider = document.querySelector('.divider');
+    const joinBtn = document.getElementById('btn-join');
 
-  // Initialisiere Dropdowns mit Standardwert
-  modeSelects.forEach(s => { if(s) s.value = selectedGameMode; });
+    codeInput.value = joinCode.toUpperCase();
+    
+    // UI radikal vereinfachen für "Quick Join"
+    if (createBtn) createBtn.style.display = 'none';
+    if (divider) divider.style.display = 'none';
+    if (codeInput) codeInput.style.display = 'none'; // Code ist fix, also verstecken
+    if (joinBtn) {
+      joinBtn.textContent = "Lobby beitreten";
+      joinBtn.classList.add('btn-primary', 'btn-large');
+    }
 
-  modeSelects.forEach(select => {
-    if (!select) return;
-    select.addEventListener('change', async () => {
-      if (lobbyId && lastGameState && lastGameState.phase !== 'end' && lastGameState.phase !== 'waiting') {
-        toast("Modus-Wechsel während des Spiels nicht möglich ❌");
-        select.value = selectedGameMode;
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    if (nameInput.value) {
+      // Falls Name schon da ist: Automatisch joinen, sobald Firebase bereit ist
+      const checkReady = setInterval(() => {
+        if (fbReady) { clearInterval(checkReady); joinLobby(); }
+      }, 100);
+    } else {
+      nameInput.focus();
+      toast("Gib deinen Namen ein, um beizutreten! 👋");
+    }
+  }
+
+  // --- Custom Mode Switcher Logic ---
+  const initCustomSelect = (containerId) => {
+    const container = document.getElementById(containerId);
+    if (!container || container.dataset.init === 'true') return;
+    const trigger = container.querySelector('.select-trigger');
+    const options = container.querySelectorAll('.option');
+
+    trigger.onclick = (e) => {
+      e.stopPropagation();
+      if (container.classList.contains('disabled')) {
+        if (lobbyId && !isHost) toast("Nur der Host kann den Modus ändern.");
         return;
       }
-      const newMode = select.value;
-      if (lobbyId && isHost) {
-        try {
-          await update(ref(db, `lobbies/${lobbyId}`), { gameType: newMode });
-          toast("Spielmodus geändert 🔄");
-        } catch (e) {
-          console.error("Error updating game mode:", e);
-          toast("Fehler beim Ändern des Spielmodus ❌");
-          // Revert UI if update fails
-          select.value = selectedGameMode;
+      document.querySelectorAll('.custom-select').forEach(c => {
+        if (c !== container) c.classList.remove('active');
+      });
+      container.classList.toggle('active');
+    };
+
+    options.forEach(opt => {
+      opt.onclick = async () => {
+        const newMode = opt.dataset.value;
+        container.classList.remove('active');
+        
+        if (lobbyId && lastGameState && lastGameState.phase !== 'end' && lastGameState.phase !== 'waiting') {
+          toast("Wechsel während des Spiels nicht möglich ❌");
+          return;
         }
-      } else if (lobbyId && !isHost) {
-        select.value = selectedGameMode; // Revert to current lobby mode
-        toast("Nur der Host kann den Spielmodus ändern.", 3000);
-      } else {
-        // Not in a lobby, update local selectedGameMode
-        selectedGameMode = newMode;
-      }
+
+        if (lobbyId && isHost) {
+          await update(ref(db, `lobbies/${lobbyId}`), { gameType: newMode });
+        } else if (!lobbyId) {
+          selectedGameMode = newMode;
+          updateCustomSelectUI(newMode);
+        }
+      };
     });
-  });
+    container.dataset.init = 'true';
+  };
+
+  initCustomSelect('mode-select-lobby');
+  initCustomSelect('mode-select-game');
+
+  // Klick außerhalb schließt Dropdown
+  window.onclick = () => {
+    document.querySelectorAll('.custom-select').forEach(c => c.classList.remove('active'));
+  };
 
   document.getElementById('btn-create').addEventListener('click', createLobby);
   document.getElementById('btn-join').addEventListener('click', joinLobby);
@@ -214,10 +267,27 @@ function setupHomeUI() {
     if (e.key === 'Enter') joinLobby();
   });
   document.getElementById('input-name').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('input-code').focus();
+    if (e.key === 'Enter') {
+      if (document.getElementById('input-code').style.display === 'none') joinLobby();
+      else document.getElementById('input-code').focus();
+    }
   });
   const confirmBtn = document.getElementById('btn-confirm-drinking');
   if (confirmBtn) confirmBtn.addEventListener('click', confirmSips);
+
+  document.getElementById('btn-show-qr').onclick = showQRCode;
+  document.body.dataset.uiReady = 'true';
+}
+
+function updateCustomSelectUI(mode) {
+  const containers = ['mode-select-lobby', 'mode-select-game'];
+  containers.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const label = mode === 'busfahrer' ? 'Busfahrer' : 'Drunter & Drüber';
+    el.querySelector('.current-value').textContent = label;
+    el.querySelectorAll('.option').forEach(opt => opt.classList.toggle('selected', opt.dataset.value === mode));
+  });
 }
 
 // ── CREATE LOBBY ──────────────────────────────────────────
@@ -226,6 +296,11 @@ async function createLobby() {
   const nameInput = document.getElementById('input-name').value.trim();
   if (!nameInput) { toast('Bitte Namen eingeben'); return; }
   myName = nameInput;
+
+  if (!fbReady) {
+    toast('⏳ Verbindung wird noch hergestellt...');
+    return;
+  }
   localStorage.setItem('bf_name', myName);
   isHost = true;
 
@@ -242,7 +317,8 @@ async function createLobby() {
     }
   });
 
-  onDisconnect(ref(db, `lobbies/${lobbyId}`)).remove();
+  // Host markiert sich bei Abbruch als offline, löscht aber NICHT die Lobby
+  onDisconnect(ref(db, `lobbies/${lobbyId}/players/${myId}`)).update({ disconnected: true, lastSeen: getServerNow() });
 
   enterLobbyScreen();
 }
@@ -254,6 +330,11 @@ async function joinLobby() {
   const code = document.getElementById('input-code').value.trim().toUpperCase();
   if (!nameInput) { toast('Bitte Namen eingeben'); return; }
   if (!code || code.length !== 6) { toast('Bitte gültigen Code eingeben'); return; }
+
+  if (!fbReady) {
+    toast('⏳ Verbindung wird noch hergestellt...');
+    return;
+  }
 
   myName = nameInput;
   localStorage.setItem('bf_name', myName);
@@ -267,13 +348,22 @@ async function joinLobby() {
   isHost = false;
   lobbyId = code;
   await set(ref(db, `lobbies/${lobbyId}/players/${myId}`), {
-    name: myName, id: myId, host: false, joinedAt: Date.now()
+    name: myName, id: myId, host: false, joinedAt: Date.now(), disconnected: false, lastSeen: getServerNow()
   });
 
-  onDisconnect(ref(db, `lobbies/${lobbyId}/players/${myId}`)).remove();
+  // Spieler markiert sich bei Abbruch als offline
+  onDisconnect(ref(db, `lobbies/${lobbyId}/players/${myId}`)).update({ disconnected: true, lastSeen: getServerNow() });
 
   pyramidSize = lobby.pyramidSize || 10;
   enterLobbyScreen();
+}
+
+function showQRCode() {
+  if (!lobbyId) return;
+  const joinUrl = `${window.location.origin}${window.location.pathname}?join=${lobbyId}`;
+  const qrImg = document.getElementById('qr-code-img');
+  qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}&bgcolor=ffffff&color=000000`;
+  document.getElementById('qr-modal').classList.add('active');
 }
 
 // ── LOBBY SCREEN ──────────────────────────────────────────
@@ -281,9 +371,13 @@ function enterLobbyScreen() {
   showScreen('lobby');
   document.getElementById('lobby-code-display').textContent = lobbyId;
 
+  // Sicherstellen, dass man als online markiert ist
+  update(ref(db, `lobbies/${lobbyId}/players/${myId}`), { disconnected: false, lastSeen: getServerNow() });
+
   // Modus-Wechsler für Host aktivieren, für andere sperren
-  const modeSelectLobby = document.getElementById('mode-select-lobby');
-  if (modeSelectLobby) modeSelectLobby.disabled = !isHost;
+  const modeContainer = document.getElementById('mode-select-lobby');
+  if (modeContainer) modeContainer.classList.toggle('disabled', !isHost);
+  updateCustomSelectUI(selectedGameMode);
 
   // Copy code on click
   document.getElementById('lobby-code-display').onclick = () => {
@@ -298,8 +392,7 @@ function enterLobbyScreen() {
   const unsubType = onValue(typeRef, snap => {
     if (snap.exists()) {
       selectedGameMode = snap.val();
-      document.getElementById('mode-select-lobby').value = selectedGameMode;
-      document.getElementById('mode-select-game').value = selectedGameMode;
+      updateCustomSelectUI(selectedGameMode);
 
       // Pyramidenselektor Sichtbarkeit live anpassen
       const pyramidSel = document.getElementById('pyramid-selector');
@@ -398,15 +491,16 @@ function enterLobbyScreen() {
 function renderPlayerList(players) {
   const list = document.getElementById('player-list');
   const sorted = Object.values(players).sort((a, b) => a.joinedAt - b.joinedAt);
-  list.innerHTML = sorted.map(p => {
+  list.innerHTML = sorted.map((p, idx) => {
     const isMe = p.id === myId;
     const isH = p.host;
-    const emoji = ['👑', '🎩', '🎲', '🎭', '🍀', '💎'][sorted.indexOf(p) % 6];
-    return `<div class="player-card ${isH ? 'player-host' : ''} ${isMe ? 'player-me' : ''}">
+    const isOffline = p.disconnected;
+    const emoji = ['👑', '🎩', '🎲', '🎭', '🍀', '💎'][idx % 6];
+    return `<div class="player-card ${isH ? 'player-host' : ''} ${isMe ? 'player-me' : ''} ${isOffline ? 'player-disconnected' : ''}">
       <div class="player-avatar">${emoji}</div>
       <div class="player-info">
         <div class="player-name">${escHtml(p.name)}</div>
-        <div class="player-role">${isH ? '👑 Host' : 'Spieler'}</div>
+        <div class="player-role">${isH ? '👑 Host' : 'Spieler'} ${isOffline ? '(Offline)' : ''}</div>
       </div>
     </div>`;
   }).join('');
@@ -417,10 +511,22 @@ async function leaveLobby() {
   if (gameListener) { gameListener(); gameListener = null; }
   if (window._matchTicker) clearInterval(window._matchTicker);
   if (hostTimerInterval) clearTimeout(hostTimerInterval);
+  if (hostCleanupInterval) clearInterval(hostCleanupInterval);
+  hostCleanupInterval = null;
+
   if (lobbyId) {
-    if (isHost) {
+    const snap = await get(ref(db, `lobbies/${lobbyId}/players`));
+    const players = snap.val() || {};
+    const pids = Object.keys(players);
+
+    // onDisconnect entfernen, da wir die Lobby manuell verlassen
+    onDisconnect(ref(db, `lobbies/${lobbyId}/players/${myId}`)).cancel();
+
+    if (pids.length <= 1) {
+      // Letzter Spieler löscht die ganze Lobby
       await remove(ref(db, `lobbies/${lobbyId}`));
     } else {
+      // Nur eigenen Eintrag entfernen. Die Migration triggert für andere automatisch.
       await remove(ref(db, `lobbies/${lobbyId}/players/${myId}`));
     }
   }
@@ -513,8 +619,8 @@ function enterGameScreen() {
   showScreen('game');
 
   // Während des Spiels den Modus-Wechsler für alle deaktivieren
-  const modeSelectGame = document.getElementById('mode-select-game');
-  if (modeSelectGame) modeSelectGame.disabled = true;
+  const modeContainer = document.getElementById('mode-select-game');
+  if (modeContainer) modeContainer.classList.add('disabled');
 
   // Zurück-Button Logik im Spiel
   document.getElementById('btn-back-game').onclick = async () => {
@@ -1987,3 +2093,4 @@ window.revealTiebreakerCard = revealTiebreakerCard;
 window.requestBusTakeOver = requestBusTakeOver;
 window.respondToBusTakeOver = respondToBusTakeOver;
 window.distributeSips = distributeSips;
+window.showQRCode = showQRCode;

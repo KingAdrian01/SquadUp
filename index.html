@@ -45,7 +45,7 @@
     </div>
     <div class="home-content">
       <div class="logo-wrap">
-        <div class="logo-sub">Busfahrer to go</div>
+        <div class="logo-sub">Karten to go</div>
         <h1 class="logo">SQUADUP</h1>
         <div class="logo-tagline">More coming soon </div>
       </div>
@@ -66,11 +66,22 @@
   <!-- ===== SCREEN: LOBBY ===== -->
   <div id="screen-lobby" class="screen">
     <div class="screen-header">
-      <select class="mode-switcher-select" id="mode-select-lobby">
-        <option value="busfahrer">Busfahrer</option>
-        <option value="drunterdrueber">Drunter & Drüber</option>
-      </select>
-      <button class="btn-back" id="btn-leave-lobby">←</button>
+      <div class="custom-select" id="mode-select-lobby">
+        <div class="select-trigger">
+          <span class="current-value">Busfahrer</span>
+          <span class="chevron"></span>
+        </div>
+        <div class="select-options">
+          <div class="option" data-value="busfahrer">Busfahrer</div>
+          <div class="option" data-value="drunterdrueber">Drunter & Drüber</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="btn-icon" id="btn-show-qr" title="QR Code anzeigen">
+          <img src="qrcode-icon.png" alt="QR" id="qr-mini-icon" class="qr-btn-icon">
+        </button>
+        <button class="btn-back" id="btn-leave-lobby">←</button>
+      </div>
     </div>
     <div class="lobby-body">
       <div class="lobby-code-banner">
@@ -96,10 +107,16 @@
   <div id="screen-game" class="screen">
     <!-- Phase indicator -->
     <div class="game-header">
-      <select class="mode-switcher-select" id="mode-select-game">
-        <option value="busfahrer">Busfahrer</option>
-        <option value="drunterdrueber">Drunter & Drüber</option>
-      </select>
+      <div class="custom-select" id="mode-select-game">
+        <div class="select-trigger">
+          <span class="current-value">Busfahrer</span>
+          <span class="chevron"></span>
+        </div>
+        <div class="select-options">
+          <div class="option" data-value="busfahrer">Busfahrer</div>
+          <div class="option" data-value="drunterdrueber">Drunter & Drüber</div>
+        </div>
+      </div>
       <div class="game-header-status">
         <div id="phase-badge" style="display:none"></div>
         <div class="current-player-badge" id="current-player-badge"></div>
@@ -115,6 +132,18 @@
 
     <!-- Toast notification -->
     <div class="toast" id="toast"></div>
+  </div>
+
+  <!-- ===== QR CODE MODAL ===== -->
+  <div id="qr-modal" class="modal-overlay">
+    <div class="modal-box qr-modal-box">
+      <h2 class="modal-title">Freunde einladen</h2>
+      <p class="modal-desc">Lass deine Freunde diesen Code scannen, um direkt beizutreten.</p>
+      <div id="qr-container">
+        <img id="qr-code-img" src="" alt="Lobby QR Code">
+      </div>
+      <button class="btn btn-secondary btn-large" onclick="document.getElementById('qr-modal').classList.remove('active')">Schließen</button>
+    </div>
   </div>
 
   <!-- ===== DRINKING MODAL ===== -->
