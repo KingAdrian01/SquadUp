@@ -8,7 +8,7 @@ import { inject } from '@vercel/analytics';
 // ===================================================
 
 const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; // 2 Minuten Puffer
-const APP_VERSION = '1.2.3'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '2.1.0'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
