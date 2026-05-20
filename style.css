@@ -54,11 +54,14 @@ html, body {
   transition: opacity 0.35s ease, transform 0.35s ease;
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; /* Flüssiges Scrollen auf iOS */
+  touch-action: manipulation;        /* Verhindert Verzögerungen bei Klicks */
 }
 .screen.active {
   opacity: 1;
   pointer-events: all;
   transform: translateY(0);
+  z-index: 1;                        /* Stellt sicher, dass der aktive Screen oben liegt */
 }
 
 /* ===== HOME SCREEN ===== */

@@ -8,7 +8,7 @@ import { inject } from '@vercel/analytics';
 // ===================================================
 
 const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; // 2 Minuten Puffer
-const APP_VERSION = '2.1.3'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '2.1.4'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -57,7 +57,16 @@ const myConfig = {
 };
 
 async function initFirebase(config) {
-  const m = window._firebaseModules;
+  // Warten, bis Firebase-Module verfügbar sind (Safari-Fix)
+  let m = window._firebaseModules;
+  let retries = 0;
+  while (!m && retries < 50) { // Max 5 Sekunden warten
+    await new Promise(r => setTimeout(r, 100));
+    m = window._firebaseModules;
+    retries++;
+  }
+  if (!m) throw new Error("Firebase konnte nicht geladen werden.");
+
   const app = m.initializeApp(config); 
   db = m.getDatabase(app);
   ref = m.ref; set = m.set; get = m.get; push = m.push;
@@ -96,9 +105,18 @@ function hideAllModals() {
 }
 
 function showScreen(id) {
-  hideAllModals(); // Alle Modals ausblenden, wenn ein neuer Bildschirm angezeigt wird
+  const target = document.getElementById('screen-' + id);
+  if (!target) return;
+  
+  // Verhindert den Redundanten Toggle-Bug in Safari
+  if (target.classList.contains('active')) {
+    hideAllModals();
+    return;
+  }
+
+  hideAllModals();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + id).classList.add('active');
+  target.classList.add('active');
 }
 
 // ── Toast ─────────────────────────────────────────────────
@@ -129,10 +147,14 @@ function genCode() {
 
 // ── INIT ──────────────────────────────────────────────────
 async function initApp() {
-  // 1. Zuerst die UI aufbauen
-  setupHomeUI();
-  injectSpeedInsights(); 
-  inject(); 
+  try {
+    // 1. Zuerst die UI aufbauen
+    setupHomeUI();
+    injectSpeedInsights(); 
+    inject(); 
+  } catch (e) {
+    console.error("UI Setup Fehler:", e);
+  }
 
   const statusEl = document.getElementById('connection-status');
   if (statusEl) {
@@ -162,14 +184,19 @@ async function initApp() {
       showFirebaseModal();
     });
     
-    checkVersion(); 
+    // Versions-Check leicht verzögern, um Safari nicht beim ersten Render zu stören
+    setTimeout(checkVersion, 1500); 
   } catch (error) {
-    // Hier werden Fehler abgefangen, die im try-Block (nicht in den Promises) passieren
     console.error("Initialisierungsfehler:", error);
-  } // <--- Diese Klammer und der catch-Block haben gefehlt
+  }
 }
 
-initApp();
+// Sicherstellen, dass der DOM wirklich bereit ist (wichtig für iOS Safari)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
 
 async function checkVersion() {
   try {
