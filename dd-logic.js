@@ -13,7 +13,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
   let html = `<div class="dd-grid">
     <div class="current-player-badge">
       Dran: <strong>${escHtml(player.name)}</strong> (Serie: ${gs.currentStreak})
-      ${player.sipPool > 0 ? `<span class="sip-pool-badge" id="sip-pool-target">🍺 ${player.sipPool}</span>` : ''}
+      ${player.sipPool > 0 ? `<span class="sip-pool-badge" id="sip-pool-target"><i data-lucide="beer" style="width:14px;height:14px;margin-right:4px;"></i> ${player.sipPool}</span>` : ''}
     </div>`;
 
   (gs.rows || []).forEach((row, idx) => {
@@ -28,7 +28,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
       <div class="dd-row ${isSelectable ? 'selectable' : ''} ${isActive ? 'active-selection' : ''}" 
            onclick="${isSelectable ? `window.selectDDRow(${idx})` : ''}">
         <div class="dd-row-header">
-          <span>Reihe ${idx + 1} ${isLongest ? '🔥' : ''}</span>
+          <span>Reihe ${idx + 1} ${isLongest ? '<i data-lucide="flame" style="color:var(--accent);width:12px;height:12px;"></i>' : ''}</span>
           <span>${rowLen} Karten</span>
         </div>
         <div class="dd-row-cards">
@@ -52,7 +52,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
       const pool = gs.players[myId].sipPool || 0;
       html += `
         <div class="choice-section highlight-border">
-          <div class="choice-title">Schlucke verteilen! 🍺</div>
+          <div class="choice-title">Schlucke verteilen! <i data-lucide="beer" class="icon-sm"></i></div>
           <div class="choice-question">Du hast ${pool} Schlucke</div>
           <div class="distribute-ui">
             <select id="distribute-amount" class="sip-select">
@@ -82,10 +82,10 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
             <div class="choice-title">Reihe ${gs.selectedRowIndex + 1} gewählt</div>
             <div class="choice-question">Wo möchtest du anlegen?</div>
             <div class="choice-buttons">
-              <button class="choice-btn" onclick="window.selectDDSide('left')"><span class="choice-emoji">⬅️</span>Links</button>
-              <button class="choice-btn" onclick="window.selectDDSide('right')"><span class="choice-emoji">➡️</span>Rechts</button>
+              <button class="choice-btn" onclick="window.selectDDSide('left')"><i data-lucide="arrow-left"></i>Links</button>
+              <button class="choice-btn" onclick="window.selectDDSide('right')"><i data-lucide="arrow-right"></i>Rechts</button>
             </div>
-            ${gs.currentStreak >= 3 ? `<button class="btn btn-secondary btn-large" style="margin-top:10px;" onclick="window.passDDTurn()">💰 Zug sicher beenden</button>` : ''}
+            ${gs.currentStreak >= 3 ? `<button class="btn btn-secondary btn-large btn-with-icon" style="margin-top:10px;" onclick="window.passDDTurn()"><i data-lucide="shield-check" style="margin-right:8px;"></i>Zug sicher beenden</button>` : ''}
           </div>`;
       } else {
         const row = gs.rows[gs.selectedRowIndex];
@@ -97,13 +97,13 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
         
       html += `
         <div class="choice-section">
-          <div class="choice-title">Seite: ${gs.selectedSide === 'left' ? 'Links ⬅️' : 'Rechts ➡️'} (Basis: ${compareCard.value})</div>
+          <div class="choice-title">Seite: ${gs.selectedSide === 'left' ? 'Links' : 'Rechts'} (Basis: ${compareCard.value})</div>
           <div class="choice-question">Drunter oder Drüber?</div>
           <div class="choice-buttons">
-            <button class="choice-btn" onclick="window.handleDDChoice('over')"><span class="choice-emoji">⬆️</span>Drüber</button>
-            <button class="choice-btn" onclick="window.handleDDChoice('under')"><span class="choice-emoji">⬇️</span>Drunter</button>
+            <button class="choice-btn" onclick="window.handleDDChoice('over')"><i data-lucide="chevron-up"></i>Drüber</button>
+            <button class="choice-btn" onclick="window.handleDDChoice('under')"><i data-lucide="chevron-down"></i>Drunter</button>
           </div>
-          <button class="btn btn-link" onclick="window.selectDDSide(null)" style="margin-top:10px">🔙 Seite ändern</button>
+          <button class="btn btn-link btn-with-icon" onclick="window.selectDDSide(null)" style="margin-top:10px"><i data-lucide="undo-2" style="width:14px;height:14px;margin-right:4px;"></i>Seite ändern</button>
         </div>`;
       }
     }
@@ -111,6 +111,9 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
 
   html += `</div>`;
   area.innerHTML = html;
+
+  // Icons initialisieren nach dem Rendern
+  if (window.lucide) window.lucide.createIcons();
 
   // Listener für Verteil-Buttons anhängen
   if (gs.distributionActive && gs.playerOrder[gs.distributionGiverIndex] === myId) {

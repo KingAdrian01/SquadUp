@@ -8,7 +8,7 @@ import { inject } from '@vercel/analytics';
 // ===================================================
 
 const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; // 2 Minuten Puffer
-const APP_VERSION = '2.1.5'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '2.1.6'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -181,6 +181,14 @@ async function initApp() {
         statusEl.textContent = "Bereit";
         statusEl.classList.remove('connecting');
         statusEl.classList.add('ready');
+
+        // Reconnect-Logik: Falls der Tab neu geladen wurde, versuchen wir die Lobby wiederherzustellen
+        const savedLobbyId = localStorage.getItem('bf_lobbyId');
+        const urlParams = new URLSearchParams(window.location.search);
+        if (savedLobbyId && !urlParams.get('join')) {
+          joinLobby(savedLobbyId);
+        }
+
         setTimeout(() => { statusEl.style.opacity = "0"; }, 2000);
       }
     }).catch(e => {
@@ -363,7 +371,6 @@ function updateCustomSelectUI(mode) {
 
 // ── CREATE LOBBY ──────────────────────────────────────────
 async function createLobby() {
-  await checkVersion(); 
   const nameInput = document.getElementById('input-name').value.trim();
   if (!nameInput) { toast('Bitte Namen eingeben'); return; }
   myName = nameInput;
@@ -376,6 +383,7 @@ async function createLobby() {
   isHost = true;
 
   lobbyId = genCode();
+  localStorage.setItem('bf_lobbyId', lobbyId);
 
   const lobbyRef = ref(db, `lobbies/${lobbyId}`);
   await set(lobbyRef, {
@@ -395,10 +403,13 @@ async function createLobby() {
 }
 
 // ── JOIN LOBBY ─────────────────────────────────────────────
-async function joinLobby() {
-  await checkVersion(); 
-  const nameInput = document.getElementById('input-name').value.trim();
-  const code = document.getElementById('input-code').value.trim().toUpperCase();
+async function joinLobby(reconnectCode = null) {
+  // Falls durch Button-Klick aufgerufen, ist reconnectCode ein Event-Objekt -> ignorieren
+  const isAutoJoin = (typeof reconnectCode === 'string');
+  
+  const nameInput = isAutoJoin ? localStorage.getItem('bf_name') : document.getElementById('input-name').value.trim();
+  const code = isAutoJoin ? reconnectCode : document.getElementById('input-code').value.trim().toUpperCase();
+
   if (!nameInput) { toast('Bitte Namen eingeben'); return; }
   if (!code || code.length !== 6) { toast('Bitte gültigen Code eingeben'); return; }
 
@@ -411,13 +422,18 @@ async function joinLobby() {
   localStorage.setItem('bf_name', myName);
 
   const snap = await get(ref(db, `lobbies/${code}`));
-  if (!snap.exists()) { toast('Lobby nicht gefunden ❌'); return; }
+  if (!snap.exists()) { 
+    localStorage.removeItem('bf_lobbyId');
+    toast('Lobby nicht gefunden ❌'); return; 
+  }
   const lobby = snap.val();
-  if (lobby.status !== 'waiting') { toast('Spiel läuft bereits'); return; }
+  const isAlreadyIn = lobby.players && lobby.players[myId];
+  if (lobby.status !== 'waiting' && !isAlreadyIn) { toast('Spiel läuft bereits'); return; }
 
   selectedGameMode = lobby.gameType || 'busfahrer';
-  isHost = false;
+  isHost = (lobby.host === myId);
   lobbyId = code;
+  localStorage.setItem('bf_lobbyId', lobbyId);
   await set(ref(db, `lobbies/${lobbyId}/players/${myId}`), {
     name: myName, id: myId, host: false, joinedAt: Date.now(), disconnected: false, lastSeen: getServerNow()
   });
@@ -533,7 +549,8 @@ function enterLobbyScreen() {
       autoLockMissedCards(game);
     }
 
-      if (game.phase === 'round1' || game.phase === 'playing') {
+      // Wenn wir beitreten und das Spiel ist schon in irgendeiner Phase (außer waiting)
+      if (game.phase && game.phase !== 'waiting') {
         unsubFns.forEach(f => f());
         unsubFns = [];
         enterGameScreen();
@@ -566,7 +583,7 @@ function renderPlayerList(players) {
     const isMe = p.id === myId;
     const isH = p.host;
     const isOffline = p.disconnected;
-    const emoji = ['👑', '🎩', '🎲', '🎭', '🍀', '💎'][idx % 6];
+    const emoji = ['⭐', '🌟', '✨', '⚡', '🔥', '💎'][idx % 6]; // Avatare bleiben Symbole oder Text
     return `<div class="player-card ${isH ? 'player-host' : ''} ${isMe ? 'player-me' : ''} ${isOffline ? 'player-disconnected' : ''}">
       <div class="player-avatar">${emoji}</div>
       <div class="player-info">
@@ -585,6 +602,7 @@ async function leaveLobby() {
   if (hostCleanupInterval) clearInterval(hostCleanupInterval);
   hostCleanupInterval = null;
 
+  localStorage.removeItem('bf_lobbyId');
   if (lobbyId) {
     const snap = await get(ref(db, `lobbies/${lobbyId}/players`));
     const players = snap.val() || {};
@@ -725,6 +743,9 @@ function enterGameScreen() {
     }
 
     renderGame(gs);
+    
+    // Initialisiere Icons nach jedem globalen State-Update
+    if (window.lucide) window.lucide.createIcons();
   });
 }
 
@@ -740,7 +761,7 @@ function animateSipsToPool(count) {
   for (let i = 0; i < count; i++) {
     const sip = document.createElement('div');
     sip.className = 'flying-sip';
-    sip.textContent = '🍺';
+    sip.innerHTML = '<i data-lucide="beer" style="color:var(--accent)"></i>';
     sip.style.left = `${sourceRect.left + sourceRect.width / 2 - 15}px`;
     sip.style.top = `${sourceRect.top}px`;
     document.body.appendChild(sip);
@@ -754,6 +775,9 @@ function animateSipsToPool(count) {
 
     setTimeout(() => sip.remove(), 1000 + i * 150);
   }
+
+  // Wichtig: Da die Icons dynamisch zum Body hinzugefügt wurden, müssen sie initialisiert werden
+  if (window.lucide) window.lucide.createIcons();
 }
 
 window.selectDDRow = (idx) => {
@@ -801,11 +825,11 @@ window.handleDDChoice = async (choice) => {
         const bonus = newStreak - 3;
         animateSipsToPool(bonus);
         updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = (gs.players[myId].sipPool || 0) + bonus;
-        toast(`✅ Richtig! ${bonus} Schluck${bonus > 1 ? 'e' : ''} zum Verteilen gesammelt.`);
+        toast(`✅ Richtig! +${bonus} zum Verteilen`);
       }
     } else {
       const penalty = (row.left?.length || 0) + 1 + (row.right?.length || 0);
-      toast(`❌ Falsch! Trink ${penalty} Schlucke!`);
+      toast(`❌ Falsch!`);
       updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = (gs.players[myId].sipsToDrink || 0) + penalty;
       updates[`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`] = (gs.players[myId].sipsTotal || 0) + penalty;
       updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
@@ -947,7 +971,7 @@ function renderRound1(gs, isMyTurn, currentPlayer, area) {
     if (giverId === myId) {
       const pool = gs.players[myId].sipPool || 0;
       html += `<div class="choice-section highlight-border">
-        <div class="choice-title">Schlucke verteilen! 🍺</div>
+        <div class="choice-title">Schlucke verteilen! <i data-lucide="beer" class="icon-sm"></i></div>
         <div class="choice-question">Du hast noch ${pool} Schlucke</div>
         <div class="distribute-ui">
           <select id="distribute-amount" class="sip-select">
@@ -996,6 +1020,7 @@ function renderRound1(gs, isMyTurn, currentPlayer, area) {
   html += renderAllHands(gs);
 
   area.innerHTML = html;
+  if (window.lucide) window.lucide.createIcons();
 
   if (isMyTurn && !gs.distributionActive && !gs.drinkingActive) {
     area.querySelectorAll('.choice-btn').forEach(btn => {
@@ -1015,22 +1040,22 @@ function renderRound1(gs, isMyTurn, currentPlayer, area) {
 function getChoiceButtons(step, drawn, disabled = false) {
   const d = disabled ? 'disabled' : '';
   if (step === 0) {
-    return `<button class="choice-btn" data-choice="red" ${d}><span class="choice-emoji">🔴</span>Rot</button>
-            <button class="choice-btn" data-choice="black" ${d}><span class="choice-emoji">⚫</span>Schwarz</button>`;
+    return `<button class="choice-btn" data-choice="red" ${d}><i data-lucide="circle" style="color:var(--red);fill:var(--red);"></i>Rot</button>
+            <button class="choice-btn" data-choice="black" ${d}><i data-lucide="circle" style="color:#fff;fill:#000;"></i>Schwarz</button>`;
   }
   if (step === 1) {
-    return `<button class="choice-btn" data-choice="higher" ${d}><span class="choice-emoji">⬆️</span>Höher</button>
-            <button class="choice-btn" data-choice="lower" ${d}><span class="choice-emoji">⬇️</span>Tiefer</button>`;
+    return `<button class="choice-btn" data-choice="higher" ${d}><i data-lucide="chevron-up"></i>Höher</button>
+            <button class="choice-btn" data-choice="lower" ${d}><i data-lucide="chevron-down"></i>Tiefer</button>`;
   } else if (step === 2) {
     const lo = VALUE_ORDER[drawn[0].value];
     const hi = VALUE_ORDER[drawn[1].value];
     const [min, max] = [Math.min(lo, hi), Math.max(lo, hi)];
-    return `<button class="choice-btn" data-choice="inside" ${d}><span class="choice-emoji">🔲</span>Innen (${drawn.map(c=>c.value).join('-')})</button>
-            <button class="choice-btn" data-choice="outside" ${d}><span class="choice-emoji">📤</span>Außen</button>`;
+    return `<button class="choice-btn" data-choice="inside" ${d}><i data-lucide="minimize-2"></i>Innen</button>
+            <button class="choice-btn" data-choice="outside" ${d}><i data-lucide="maximize-2"></i>Außen</button>`;
   }
   else if (step === 3) {
-    return SUITS.map(s => `<button class="choice-btn" data-choice="${s}" ${d}>
-      <span class="choice-emoji">${s}</span>${SUIT_NAMES[s]}
+    return SUITS.map(s => `<button class="choice-btn" data-choice="${s}" ${d} style="flex-direction: column; gap: 4px;">
+      <span style="font-size:24px; margin-bottom:4px;">${s}</span>${SUIT_NAMES[s]}
     </button>`).join('');
   }
 }
@@ -1074,7 +1099,7 @@ async function handleRound1Choice(choice, gs) {
     if (!correct) {
       updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = (gs.players[myId].sipsToDrink || 0) + sips;
       updates[`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`] = (gs.players[myId].sipsTotal || 0) + sips;
-      toast(`❌ Falsch! ${sips} Schluck${sips > 1 ? 'e' : ''} trinken 🍺`);
+      toast(`❌ Falsch!`);
     } else {
       updates[`lobbies/${lobbyId}/game/players/${myId}/sipPool`] = (gs.players[myId].sipPool || 0) + sipPoolBonus;
       toast('✅ Richtig!');
@@ -1268,6 +1293,9 @@ async function confirmSips() {
       } else if (lastGameState.phase === 'round2' && lastGameState.pyramidIndex >= lastGameState.pyramidSize) {
         await finishRound2(lastGameState, updates);
         return;
+      } else if (lastGameState.phase === 'round3') {
+        updates[`lobbies/${lobbyId}/game/busCards`] = [];
+        updates[`lobbies/${lobbyId}/game/busStep`] = 0;
       }
 
       // Führt das Update für alle Phasen aus (Runde 1, Runde 2 Zwischenschritte und Runde 3)
@@ -1375,7 +1403,7 @@ function renderRound2(gs, area) {
     if (giverId === myId) {
       const pool = gs.players[myId].sipPool || 0;
       html += `<div class="choice-section highlight-border">
-        <div class="choice-title">Schlucke verteilen! 🍺</div>
+        <div class="choice-title">Schlucke verteilen! <i data-lucide="beer" class="icon-sm"></i></div>
         <div class="choice-question">Reihe ${getSipsForRow(pidx-1, size)}: Du hast ${pool} Schlucke</div>
         <div class="distribute-ui">
           <select id="distribute-amount" class="sip-select">
@@ -1421,7 +1449,7 @@ function renderRound2(gs, area) {
           <div class="choice-question">Reihe ${getSipsForRow(pidx, size)} (${getSipsForRow(pidx, size)} Schlucke)</div>
           <div class="choice-buttons">
             <button class="btn btn-primary btn-large" id="btn-reveal-pyramid">
-              <span class="choice-emoji">🃏</span>Aufdecken
+              <i data-lucide="eye" style="margin-right:8px"></i>Aufdecken
             </button>
           </div>
         </div>`;
@@ -1444,6 +1472,7 @@ function renderRound2(gs, area) {
   html += renderAllHands(gs);
 
   area.innerHTML = html;
+  if (window.lucide) window.lucide.createIcons();
   
   // Lokaler UI-Ticker
   const activeCard = pyramid[pidx - 1];
@@ -1507,6 +1536,7 @@ function renderTiebreaker(gs, area) {
 
   html += renderAllHands(gs);
   area.innerHTML = html;
+  if (window.lucide) window.lucide.createIcons();
 
   // Ticker-Logik (identisch zu R2)
   if (card && timeLeft > 0 && !gs.distributionActive && !gs.drinkingActive) {
@@ -1829,8 +1859,8 @@ function renderRound3(gs, area) {
   const busCards = gs.busCards || [];
   const busStep = gs.busStep;
 
-  const stepLabels = ['🔴⚫ Rot oder Schwarz?', '⬆️⬇️ Höher oder Tiefer?', '🔲 Innen oder Außen?', '♥♦♠♣ Welches Symbol?'];
-  const stepEmojis = ['🎨', '📊', '↔️', '♠'];
+  const stepLabels = ['Rot oder Schwarz?', 'Höher oder Tiefer?', 'Innen oder Außen?', '♥♦♠♣ Welches Symbol?'];
+  const stepIcons = ['palette', 'bar-chart-2', 'arrows-up-from-line', 'spade'];
 
   let html = `<div class="bus-section">
     <div class="bus-title">🚌 BUSFAHRER</div>
@@ -1841,7 +1871,7 @@ function renderRound3(gs, area) {
     let cls = '';
     if (i < busStep) cls = 'done';
     else if (i === busStep) cls = 'current';
-    html += `<div class="bus-step ${cls}">${i < busStep ? '✓' : stepEmojis[i]}</div>`;
+    html += `<div class="bus-step ${cls}">${i < busStep ? '<i data-lucide="check" style="width:18px;height:18px;"></i>' : `<i data-lucide="${stepIcons[i]}" style="width:18px;height:18px;"></i>`}</div>`;
   }
   html += `</div>`;
 
@@ -1859,10 +1889,10 @@ function renderRound3(gs, area) {
     if (gs.takeOverRequest && isMainBus && !gs.guestDriverId && !gs.pendingGuestDriverId) {
       const requester = gs.players[gs.takeOverRequest];
       html += `<div class="choice-section highlight-border" style="margin-bottom:15px">
-        <div class="choice-title">🤝 Anfrage erhalten</div>
+        <div class="choice-title"><i data-lucide="handshake" style="margin-right:8px;"></i>Anfrage erhalten</div>
         <div class="choice-question" style="font-size:18px">${escHtml(requester.name)} möchte eine Runde für dich fahren!</div>
         <div class="choice-buttons">
-          <button class="btn btn-primary" onclick="respondToBusTakeOver(true)">Annehmen</button>
+          <button class="btn btn-primary btn-with-icon" onclick="respondToBusTakeOver(true)">Annehmen <i data-lucide="check"></i></button>
           <button class="btn btn-secondary" onclick="respondToBusTakeOver(false)">Ablehnen</button>
         </div>
       </div>`;
@@ -1870,12 +1900,12 @@ function renderRound3(gs, area) {
       html += `<div class="info-box" style="margin-bottom:15px">Anfrage gesendet. Warte auf Bestätigung...</div>`;
     } else if (gs.pendingGuestDriverId) {
       const pPlayer = gs.players[gs.pendingGuestDriverId];
-      html += `<div class="info-box" style="margin-bottom:15px">⏳ <strong>${escHtml(pPlayer.name)}</strong> übernimmt nach dem nächsten Fehler!</div>`;
+      html += `<div class="info-box" style="margin-bottom:15px"><i data-lucide="timer"></i> <strong>${escHtml(pPlayer.name)}</strong> übernimmt nach dem nächsten Fehler!</div>`;
     } else if (guestId) {
       const gPlayer = gs.players[guestId];
-      html += `<div class="info-box highlight-border" style="margin-bottom:15px">🌟 <strong>${escHtml(gPlayer.name)}</strong> hat das Steuer für diese Runde übernommen!</div>`;
+      html += `<div class="info-box highlight-border" style="margin-bottom:15px"><i data-lucide="star" style="color:var(--accent);"></i> <strong>${escHtml(gPlayer.name)}</strong> fährt diese Runde!</div>`;
     } else if (!isMainBus && !gs.takeOverRequest && !gs.guestDriverId && !gs.pendingGuestDriverId && !gs.drinkingActive) {
-      html += `<button class="btn btn-secondary btn-large" style="margin-bottom:15px" onclick="requestBusTakeOver()">🙋‍♂️ Steuer für eine Runde übernehmen</button>`;
+      html += `<button class="btn btn-secondary btn-large btn-with-icon" style="margin-bottom:15px" onclick="requestBusTakeOver()"><i data-lucide="hand" style="margin-right:8px;"></i>Steuer für eine Runde übernehmen</button>`;
     }
 
     html += `<div class="choice-title">${stepLabels[busStep]}</div>
@@ -1893,12 +1923,13 @@ function renderRound3(gs, area) {
   }
 
   if (gs.busRestarts > 0) {
-    html += `<div class="info-box" style="margin-top:12px">Neustart #${gs.busRestarts} 🔄</div>`;
+    html += `<div class="info-box" style="margin-top:12px">Neustart #${gs.busRestarts} <i data-lucide="rotate-ccw"></i></div>`;
   }
 
   html += `</div>`;
 
   area.innerHTML = html;
+  if (window.lucide) window.lucide.createIcons();
 
   if (isDriving && busStep < 4 && !gs.drinkingActive) {
     area.querySelectorAll('.choice-btn').forEach(btn => {
@@ -2010,25 +2041,28 @@ async function handleBusChoice(choice, gs) {
         toast('✅ Richtig! Weiter...');
       }
     } else {
-      // FALSCH: Der aktuelle Fahrer muss trinken
-      const sipsToDrink = (gs.players[myId]?.sipsToDrink || 0) + sips;
-      const sipsTotal = (gs.players[myId]?.sipsTotal || 0) + sips;
-
-      const confirmed = {};
-      Object.keys(gs.players || {}).forEach(pid => { 
-        if(pid !== myId) confirmed[pid] = true; 
+      // 1. Erstmal nur die Karte aufdecken, damit alle sie sehen
+      await update(ref(db), {
+        [`lobbies/${lobbyId}/game/deck`]: deckCopy,
+        [`lobbies/${lobbyId}/game/busCards`]: newBusCards
       });
 
+      // 2. Kurze Pause (1.5 Sekunden)
+      await new Promise(r => setTimeout(r, 1000));
+
+      // 3. Jetzt erst das Trinken und den Rest triggern
+      const sipsToDrink = (gs.players[myId]?.sipsToDrink || 0) + sips;
+      const sipsTotal = (gs.players[myId]?.sipsTotal || 0) + sips;
+      const confirmed = {};
+      Object.keys(gs.players || {}).forEach(pid => { if(pid !== myId) confirmed[pid] = true; });
+
       const updates = {
-        [`lobbies/${lobbyId}/game/deck`]: deckCopy,
         [`lobbies/${lobbyId}/game/busRestarts`]: (gs.busRestarts || 0) + 1,
         [`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`]: sipsToDrink,
         [`lobbies/${lobbyId}/game/players/${myId}/sipsTotal`]: sipsTotal,
         [`lobbies/${lobbyId}/game/drinkingActive`]: true,
         [`lobbies/${lobbyId}/game/drinkingStartTime`]: getServerNow(),
         [`lobbies/${lobbyId}/game/confirmedDrinkers`]: confirmed,
-        [`lobbies/${lobbyId}/game/busCards`]: [],
-        [`lobbies/${lobbyId}/game/busStep`]: 0,
         [`lobbies/${lobbyId}/game/takeOverRequest`]: null,
         [`lobbies/${lobbyId}/game/guestDriverId`]: null 
       };
@@ -2042,7 +2076,7 @@ async function handleBusChoice(choice, gs) {
         toast(`🤝 ${nextName} übernimmt jetzt das Steuer!`);
       }
       
-      toast(`❌ Falsch! ${sips} Schluck${sips > 1 ? 'e' : ''} trinken 🍺`, 4000);
+      toast(`❌ Falsch!`, 4000);
       await update(ref(db), updates);
     }
   } catch (e) {
@@ -2069,7 +2103,7 @@ function renderEnd(gs, area) {
 
   players.forEach((p, i) => {
     html += `<div class="rank-row">
-      <div class="rank-num ${i === 0 ? 'first' : ''}">${i === 0 ? '🏆' : i + 1}</div>
+      <div class="rank-num ${i === 0 ? 'first' : ''}">${i === 0 ? '<i data-lucide="trophy"></i>' : i + 1}</div>
       <div class="rank-name">${escHtml(p.name)} ${p.id === myId ? '<em style="color:var(--text-muted);font-size:13px">(du)</em>' : ''}</div>
       <div class="rank-info">${p.sips} Schlucke getrunken</div>
     </div>`;
@@ -2109,15 +2143,22 @@ function renderAllHands(gs) {
 
   let html = `<div class="players-hands">
     <div class="section-title">Karten auf der Hand</div>`;
-  for (const pid of gs.playerOrder) {
+  
+  // Eigene ID an den Anfang der Liste setzen
+  const sortedPlayerOrder = [...gs.playerOrder].sort((a, b) => {
+    if (a === myId) return -1;
+    if (b === myId) return 1;
+    return 0;
+  });
+
+  for (const pid of sortedPlayerOrder) {
     const p = gs.players[pid];
     const hand = p.hand || [];
     const isMe = pid === myId;
     const toDrink = p.sipsToDrink || 0;
-    const total = p.sipsTotal || 0;
 
     html += `<div class="player-hand-row">
-      <div class="player-hand-name">${escHtml(p.name)}${isMe ? ' 👤' : ''}</div>
+      <div class="player-hand-name">${escHtml(p.name)}${isMe ? ' <i data-lucide="user" class="icon-sm" style="opacity:0.5"></i>' : ''}</div>
       <div class="player-hand-cards">
         ${
           hand.length === 0
@@ -2134,8 +2175,7 @@ function renderAllHands(gs) {
                 .join('')
         }
       </div><div class="player-sip-status">
-        ${toDrink > 0 ? `<div class="sip-count-badge">🍺 ${toDrink}</div>` : ''}
-        <div style="font-size:12px;color:var(--text-dim);margin-left:8px">Gesamt: ${total}</div>
+        ${toDrink > 0 ? `<div class="sip-count-badge"><i data-lucide="beer" style="width:12px;height:12px;margin-right:2px;"></i> ${toDrink}</div>` : ''}
       </div>
     </div>`;
   }

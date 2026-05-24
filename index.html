@@ -24,6 +24,8 @@
       }
     }
   </script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
@@ -81,7 +83,7 @@
         <button class="btn-icon" id="btn-show-qr" title="QR Code anzeigen">
           <img src="qrcode-icon.png" alt="QR" id="qr-mini-icon" class="qr-btn-icon">
         </button>
-        <button class="btn-back" id="btn-leave-lobby">←</button>
+        <button class="btn-back" id="btn-leave-lobby"><i data-lucide="arrow-left"></i></button>
       </div>
     </div>
     <div class="lobby-body">
@@ -98,7 +100,7 @@
       </div>
       <div class="player-list" id="player-list"></div>
       <div class="lobby-footer">
-        <button class="btn btn-primary btn-large" id="btn-start-game" style="display:none">Spiel starten 🚌</button>
+        <button class="btn btn-primary btn-large" id="btn-start-game" style="display:none">Spiel starten <i data-lucide="play" class="icon-inline"></i></button>
         <div class="waiting-msg" id="waiting-msg">Warte auf den Host…</div>
       </div>
     </div>
@@ -123,7 +125,7 @@
         <div class="current-player-badge" id="current-player-badge"></div>
         <div class="round-progress" id="round-progress"></div>
       </div>
-      <button class="btn-back" id="btn-back-game">←</button>
+      <button class="btn-back" id="btn-back-game"><i data-lucide="arrow-left"></i></button>
     </div>
 
     <!-- Main game area -->
@@ -150,11 +152,11 @@
   <!-- ===== DRINKING MODAL ===== -->
   <div id="drinking-modal" class="modal-overlay">
     <div class="modal-box drinking-popup">
-      <div class="drinking-emoji">🍺</div>
+      <div class="drinking-emoji"><i data-lucide="beer" style="width: 64px; height: 64px; color: var(--accent);"></i></div>
       <h2 id="drinking-count">0</h2>
       <p>Schlucke für dich!</p>
       <p class="modal-hint" id="drinking-status-text">Trink deine Schlucke!</p>
-      <button class="btn btn-primary btn-large" id="btn-confirm-drinking">
+      <button class="btn btn-primary btn-large btn-with-icon" id="btn-confirm-drinking">
         Ich habe getrunken ✅
       </button>
     </div>

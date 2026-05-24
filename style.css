@@ -64,6 +64,15 @@ html, body {
   z-index: 1;                        /* Stellt sicher, dass der aktive Screen oben liegt */
 }
 
+/* ===== LUCIDE ICONS ===== */
+.lucide {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  display: inline-block;
+  stroke-width: 2px;
+}
+
 /* ===== HOME SCREEN ===== */
 .home-bg {
   position: fixed;
@@ -401,6 +410,9 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
+  display: inline-flex; /* Für Icon-Ausrichtung */
+  gap: 6px; /* Abstand zwischen Icon und Text */
+  vertical-align: middle; /* Ausrichtung mit umgebendem Text */
 }
 .btn-back:hover { border-color: var(--accent); }
 
@@ -735,9 +747,12 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .choice-buttons {
   display: flex;
   gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 .choice-btn {
-  flex: 1;
+  flex: 1; /* Erlaubt den Buttons, sich auszudehnen */
+  min-width: 120px; /* Mindestbreite für bessere Lesbarkeit auf kleinen Bildschirmen */
   background: var(--bg3);
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
@@ -749,19 +764,23 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   cursor: pointer;
   transition: all 0.15s;
   outline: none !important;
-  display: flex;
-  flex-direction: column;
+  display: flex; /* Flexbox für vertikale Ausrichtung */
+  flex-direction: column; /* Icon über Text */
   align-items: center;
   gap: 6px;
 }
-.choice-btn:hover:not(:disabled) {
+.choice-btn:hover:not(:disabled), .choice-btn:focus {
   border-color: var(--accent);
   color: var(--accent);
   background: rgba(232,201,109,0.08);
   transform: translateY(-2px);
 }
 .choice-btn:active:not(:disabled) { transform: translateY(0); }
-.choice-btn .choice-emoji { font-size: 24px; }
+.choice-btn i {
+  width: 28px; /* Feste Größe für Icons in Choice-Buttons */
+  height: 28px;
+  margin-bottom: 4px; /* Abstand zum Text darunter */
+}
 .choice-btn:disabled { opacity: 0.5; pointer-events: none; }
 .choice-btn.selected-correct {
   border-color: var(--green);
@@ -772,6 +791,12 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   border-color: var(--red);
   background: rgba(224,82,82,0.12);
   color: var(--red);
+}
+
+/* Standard-Buttons in Auswahl-Sektionen (z.B. Übernahme-Anfragen) */
+.choice-buttons .btn {
+  flex: 1;
+  min-width: 120px;
 }
 
 /* ===== HAND DISPLAY ===== */
@@ -1086,7 +1111,7 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .dd-grid {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
 }
 .dd-row {
@@ -1115,7 +1140,7 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .dd-row-header {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-dim);
   text-transform: uppercase;
 }
@@ -1137,9 +1162,14 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   box-shadow: none; /* Kein Schimmer */
 }
 
+.choice-btn i {
+  margin-bottom: 4px;
+}
+
 .sip-pool-badge {
   background: var(--accent);
   color: var(--bg);
+  /* ... (restliche Styles bleiben gleich) ... */
   padding: 2px 10px;
   border-radius: 20px;
   font-weight: 800;
@@ -1152,12 +1182,23 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   box-shadow: 0 0 10px rgba(232,201,109,0.4);
 }
 
+/* Utility für Buttons mit inline Icons */
+.btn-with-icon {
+  display: inline-flex; /* Für die Ausrichtung von Icon und Text */
+  align-items: center; /* Vertikale Zentrierung */
+  gap: 6px; /* Kleinerer Abstand zwischen Icon und Text */
+  vertical-align: middle; /* Wichtig für die Ausrichtung im Textfluss */
+}
+
 .flying-sip {
   position: fixed;
   z-index: 10000;
   pointer-events: none;
-  font-size: 24px;
+  font-size: 28px;
   transition: all 0.8s cubic-bezier(0.5, -0.5, 0.5, 1.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ===== END SCREEN ===== */
@@ -1197,6 +1238,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   font-size: 24px;
   color: var(--text-muted);
   min-width: 30px;
+  display: flex;
+  align-items: center;
 }
 .rank-num.first { color: var(--accent); }
 .rank-name { flex: 1; font-weight: 600; }
