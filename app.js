@@ -8,7 +8,7 @@ import { inject } from '@vercel/analytics';
 // ===================================================
 
 const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; // 2 Minuten Puffer
-const APP_VERSION = '2.1.6'; // Muss mit der Version in version.json übereinstimmen
+const APP_VERSION = '2.1.7'; // Muss mit der Version in version.json übereinstimmen
 
 // ── Deck Utilities ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
@@ -457,6 +457,9 @@ function showQRCode() {
 function enterLobbyScreen() {
   showScreen('lobby');
   document.getElementById('lobby-code-display').textContent = lobbyId;
+
+  // Icons initialisieren (für den Zurück-Button und QR-Button)
+  if (window.lucide) window.lucide.createIcons();
 
   // Sicherstellen, dass man als online markiert ist
   update(ref(db, `lobbies/${lobbyId}/players/${myId}`), { disconnected: false, lastSeen: getServerNow() });
