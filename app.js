@@ -2,15 +2,12 @@ import { renderDrunterDrueber, initDDGame, checkDDCorrect } from './dd-logic.js'
 import { injectSpeedInsights } from '@vercel/speed-insights';
 import { inject } from '@vercel/analytics';
 
-// ===================================================
-//  BUSFAHRER – app.js
-//  Full multiplayer via Firebase Realtime Database
-// ===================================================
 
-const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; // 2 Minuten Puffer
-const APP_VERSION = '2.1.7'; // Muss mit der Version in version.json übereinstimmen
 
-// ── Deck Utilities ──────────────────────────────────────
+const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; 
+const APP_VERSION = '2.1.8'; 
+
+// ── Deck Sachen ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
 const SUIT_NAMES = { '♥': 'Herz', '♦': 'Karo', '♠': 'Pik', '♣': 'Kreuz' };
 const VALUES = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
@@ -34,7 +31,7 @@ function shuffle(arr) {
   return a;
 }
 
-// ── Firebase ──────────────────────────────────────────
+// ── Firebase Zeug ──────────────────────────────────────────
 let db, ref, set, get, push, onValue, update, remove, onDisconnect;
 let fbReady = false;
 
@@ -57,10 +54,9 @@ const myConfig = {
 };
 
 async function initFirebase(config) {
-  // Warten, bis Firebase-Module verfügbar sind (Safari-Fix)
   let m = window._firebaseModules;
   let retries = 0;
-  while (!m && retries < 50) { // Max 5 Sekunden warten
+  while (!m && retries < 50) { 
     await new Promise(r => setTimeout(r, 100));
     m = window._firebaseModules;
     retries++;
@@ -108,7 +104,6 @@ function showScreen(id) {
   const target = document.getElementById('screen-' + id);
   if (!target) return;
   
-  // Verhindert den Redundanten Toggle-Bug in Safari
   if (target.classList.contains('active')) {
     hideAllModals();
     return;
@@ -147,17 +142,14 @@ function genCode() {
 
 // ── INIT ──────────────────────────────────────────────────
 async function initApp() {
-  // 0. Sofortiger Versions-Check bevor die App "lebt"
-  // Wir warten auf diesen Check, um einen "Zombie-Ladevorgang" zu verhindern.
   const updateTriggered = await checkVersion();
   if (updateTriggered) {
     const statusEl = document.getElementById('connection-status');
     if (statusEl) statusEl.textContent = "Update wird geladen...";
-    return; // Initialisierung abbrechen, da die Seite neu lädt
+    return; 
   }
 
   try {
-    // 1. Zuerst die UI aufbauen
     setupHomeUI();
     injectSpeedInsights(); 
     inject(); 
@@ -172,7 +164,6 @@ async function initApp() {
   }
 
   try {
-    // Firebase-Initialisierung
     initFirebase(myConfig).then(() => {
       const modal = document.getElementById('firebase-modal');
       if (modal) modal.classList.remove('active');
@@ -182,7 +173,6 @@ async function initApp() {
         statusEl.classList.remove('connecting');
         statusEl.classList.add('ready');
 
-        // Reconnect-Logik: Falls der Tab neu geladen wurde, versuchen wir die Lobby wiederherzustellen
         const savedLobbyId = localStorage.getItem('bf_lobbyId');
         const urlParams = new URLSearchParams(window.location.search);
         if (savedLobbyId && !urlParams.get('join')) {
@@ -205,7 +195,6 @@ async function initApp() {
   }
 }
 
-// Sicherstellen, dass der DOM wirklich bereit ist (wichtig für iOS Safari)
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initApp);
 } else {
@@ -221,17 +210,13 @@ async function checkVersion() {
     const data = await response.json();
 
     if (data.version && data.version !== APP_VERSION) {
-      // Nur neu laden, wenn wir nicht GERADE erst durch genau DIESE Version neu geladen wurden
       if (versionInUrl !== data.version) {
         console.log(`Update gefunden: ${APP_VERSION} -> ${data.version}`);
-        // location.replace ist besser für Safari, da es die History nicht mit "toten" Seiten füllt
         window.location.replace(window.location.pathname + '?v=' + data.version);
         return true;
       }
     }
     
-    // Wenn wir hier landen und ein 'v' in der URL haben, sind wir aktuell.
-    // Wir säubern die URL für die Ästhetik.
     if (versionInUrl) {
       setTimeout(() => {
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -249,16 +234,13 @@ function showFirebaseModal() {
 }
 
 function setupHomeUI() {
-  // Verhindert mehrfache Zuweisung falls setupHomeUI öfter aufgerufen wird
   if (document.body.dataset.uiReady === 'true') return;
   
   showScreen('home');
 
-  // Restore name
   const savedName = localStorage.getItem('bf_name');
   if (savedName) document.getElementById('input-name').value = savedName;
 
-  // QR-Code / Einladungslink Check
   const urlParams = new URLSearchParams(window.location.search);
   const joinCode = urlParams.get('join');
   if (joinCode) {
@@ -270,10 +252,9 @@ function setupHomeUI() {
 
     codeInput.value = joinCode.toUpperCase();
     
-    // UI radikal vereinfachen für "Quick Join"
     if (createBtn) createBtn.style.display = 'none';
     if (divider) divider.style.display = 'none';
-    if (codeInput) codeInput.style.display = 'none'; // Code ist fix, also verstecken
+    if (codeInput) codeInput.style.display = 'none'; 
     if (joinBtn) {
       joinBtn.textContent = "Lobby beitreten";
       joinBtn.classList.add('btn-primary', 'btn-large');
@@ -282,7 +263,6 @@ function setupHomeUI() {
     window.history.replaceState({}, document.title, window.location.pathname);
 
     if (nameInput.value) {
-      // Falls Name schon da ist: Automatisch joinen, sobald Firebase bereit ist
       const checkReady = setInterval(() => {
         if (fbReady) { clearInterval(checkReady); joinLobby(); }
       }, 100);
@@ -292,7 +272,7 @@ function setupHomeUI() {
     }
   }
 
-  // --- Custom Mode Switcher Logic ---
+  // --- Custom Mode Switcher Logicks ---
   const initCustomSelect = (containerId) => {
     const container = document.getElementById(containerId);
     if (!container || container.dataset.init === 'true') return;
@@ -335,7 +315,6 @@ function setupHomeUI() {
   initCustomSelect('mode-select-lobby');
   initCustomSelect('mode-select-game');
 
-  // Klick außerhalb schließt Dropdown
   window.onclick = () => {
     document.querySelectorAll('.custom-select').forEach(c => c.classList.remove('active'));
   };
@@ -396,7 +375,6 @@ async function createLobby() {
     }
   });
 
-  // Host markiert sich bei Abbruch als offline, löscht aber NICHT die Lobby
   onDisconnect(ref(db, `lobbies/${lobbyId}/players/${myId}`)).update({ disconnected: true, lastSeen: getServerNow() });
 
   enterLobbyScreen();
@@ -404,7 +382,6 @@ async function createLobby() {
 
 // ── JOIN LOBBY ─────────────────────────────────────────────
 async function joinLobby(reconnectCode = null) {
-  // Falls durch Button-Klick aufgerufen, ist reconnectCode ein Event-Objekt -> ignorieren
   const isAutoJoin = (typeof reconnectCode === 'string');
   
   const nameInput = isAutoJoin ? localStorage.getItem('bf_name') : document.getElementById('input-name').value.trim();
@@ -438,7 +415,6 @@ async function joinLobby(reconnectCode = null) {
     name: myName, id: myId, host: false, joinedAt: Date.now(), disconnected: false, lastSeen: getServerNow()
   });
 
-  // Spieler markiert sich bei Abbruch als offline
   onDisconnect(ref(db, `lobbies/${lobbyId}/players/${myId}`)).update({ disconnected: true, lastSeen: getServerNow() });
 
   pyramidSize = lobby.pyramidSize || 10;
@@ -457,24 +433,17 @@ function showQRCode() {
 function enterLobbyScreen() {
   showScreen('lobby');
   document.getElementById('lobby-code-display').textContent = lobbyId;
-
-  // Icons initialisieren (für den Zurück-Button und QR-Button)
   if (window.lucide) window.lucide.createIcons();
-
-  // Sicherstellen, dass man als online markiert ist
   update(ref(db, `lobbies/${lobbyId}/players/${myId}`), { disconnected: false, lastSeen: getServerNow() });
 
-  // Modus-Wechsler für Host aktivieren, für andere sperren
   const modeContainer = document.getElementById('mode-select-lobby');
   if (modeContainer) modeContainer.classList.toggle('disabled', !isHost);
   updateCustomSelectUI(selectedGameMode);
 
-  // Copy code on click
   document.getElementById('lobby-code-display').onclick = () => {
     navigator.clipboard?.writeText(lobbyId).then(() => toast('Code kopiert! ' + lobbyId));
   };
 
-  // Leave
   document.getElementById('btn-leave-lobby').onclick = leaveLobby;
 
   // Listen for mode changes in Lobby
@@ -484,7 +453,6 @@ function enterLobbyScreen() {
       selectedGameMode = snap.val();
       updateCustomSelectUI(selectedGameMode);
 
-      // Pyramidenselektor Sichtbarkeit live anpassen
       const pyramidSel = document.getElementById('pyramid-selector');
       if (pyramidSel) {
         pyramidSel.style.display = (isHost && selectedGameMode === 'busfahrer') ? '' : 'none';
@@ -546,13 +514,11 @@ function enterLobbyScreen() {
       const game = snap.val();
       lastGameState = game;
     
-    // Host check: Timer für Pyramiden-Karten abgelaufen?
     if (isHost && (game.phase === 'round2' || game.phase === 'tiebreaker') && 
         game.matchEndTime && getServerNow() > game.matchEndTime) {
       autoLockMissedCards(game);
     }
 
-      // Wenn wir beitreten und das Spiel ist schon in irgendeiner Phase (außer waiting)
       if (game.phase && game.phase !== 'waiting') {
         unsubFns.forEach(f => f());
         unsubFns = [];
@@ -586,7 +552,7 @@ function renderPlayerList(players) {
     const isMe = p.id === myId;
     const isH = p.host;
     const isOffline = p.disconnected;
-    const emoji = ['⭐', '🌟', '✨', '⚡', '🔥', '💎'][idx % 6]; // Avatare bleiben Symbole oder Text
+    const emoji = ['⭐', '🌟', '✨', '⚡', '🔥', '💎'][idx % 6]; 
     return `<div class="player-card ${isH ? 'player-host' : ''} ${isMe ? 'player-me' : ''} ${isOffline ? 'player-disconnected' : ''}">
       <div class="player-avatar">${emoji}</div>
       <div class="player-info">
@@ -611,14 +577,11 @@ async function leaveLobby() {
     const players = snap.val() || {};
     const pids = Object.keys(players);
 
-    // onDisconnect entfernen, da wir die Lobby manuell verlassen
     onDisconnect(ref(db, `lobbies/${lobbyId}/players/${myId}`)).cancel();
 
     if (pids.length <= 1) {
-      // Letzter Spieler löscht die ganze Lobby
       await remove(ref(db, `lobbies/${lobbyId}`));
     } else {
-      // Nur eigenen Eintrag entfernen. Die Migration triggert für andere automatisch.
       await remove(ref(db, `lobbies/${lobbyId}/players/${myId}`));
     }
   }
@@ -634,7 +597,6 @@ async function startGame() {
   if (players.length < 2) { toast('Mindestens 2 Spieler benötigt'); return; }
 
   const deck = makeDeck();
-  // Deal 4 cards per player
   const playerStates = {};
   for (const p of players) {
     playerStates[p.id] = {
@@ -655,12 +617,10 @@ async function startGame() {
     return;
   }
 
-  // Lobby-Status auf 'playing' setzen, um weitere Beitritte zu verhindern
   const lobbyUpdate = {};
   lobbyUpdate[`lobbies/${lobbyId}/status`] = 'playing';
   await update(ref(db), lobbyUpdate);
 
-  // Build pyramid with unique values
   const pyrCards = [];
   const usedValues = new Set();
   const remainingDeck = [];
@@ -710,11 +670,9 @@ let lastGameState = null;
 function enterGameScreen() {
   showScreen('game');
 
-  // Während des Spiels den Modus-Wechsler für alle deaktivieren
   const modeContainer = document.getElementById('mode-select-game');
   if (modeContainer) modeContainer.classList.add('disabled');
 
-  // Zurück-Button Logik im Spiel
   document.getElementById('btn-back-game').onclick = async () => {
     if (isHost) {
       if (confirm("Spiel abbrechen und zur Lobby zurückkehren?")) {
@@ -736,7 +694,6 @@ function enterGameScreen() {
     const gs = snap.val();
     lastGameState = gs;
 
-    // Host-Wiederherstellung: Falls der Timer nach einem Refresh fehlt
     if (isHost && (gs.phase === 'round2' || gs.phase === 'tiebreaker')) {
       const now = getServerNow();
       if (gs.matchEndTime && now < gs.matchEndTime && !hostTimerInterval) {
@@ -747,7 +704,6 @@ function enterGameScreen() {
 
     renderGame(gs);
     
-    // Initialisiere Icons nach jedem globalen State-Update
     if (window.lucide) window.lucide.createIcons();
   });
 }
@@ -779,7 +735,6 @@ function animateSipsToPool(count) {
     setTimeout(() => sip.remove(), 1000 + i * 150);
   }
 
-  // Wichtig: Da die Icons dynamisch zum Body hinzugefügt wurden, müssen sie initialisiert werden
   if (window.lucide) window.lucide.createIcons();
 }
 
@@ -869,15 +824,13 @@ window.passDDTurn = async () => {
     const updates = {};
 
     if ((gs.players[myId]?.sipPool || 0) > 0) {
-      // Wenn Schlucke im Pool sind, starte die Verteilung
+
       updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
       updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = gs.currentPlayerIndex;
     } else {
-      // Keine Schlucke zu verteilen, gehe zum nächsten Spieler
       const nextIdx = (gs.currentPlayerIndex + 1) % gs.playerOrder.length;
       updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextIdx;
     }
-    // Allgemeine Resets für den Zug
     updates[`lobbies/${lobbyId}/game/currentStreak`] = 0;
     updates[`lobbies/${lobbyId}/game/turnStarted`] = false;
     updates[`lobbies/${lobbyId}/game/selectedRowIndex`] = -1;
@@ -899,10 +852,8 @@ function renderGame(gs) {
   const cpBadge = document.getElementById('current-player-badge');
   const progress = document.getElementById('round-progress');
 
-  // Handle drinking popup für alle Spielmodi (muss vor dem return stehen!)
   manageDrinkingPopup(gs);
 
-  // Sicherheitscheck falls phase-badge fehlt (verhindert dark screen)
   if (!phaseBadge) return; 
 
   if (gs.gameType === 'drunterdrueber' || gs.phase === 'playing') {
@@ -1126,7 +1077,6 @@ async function handleRound1Choice(choice, gs) {
         updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = firstGiverIdx;
         updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
       } else {
-        // Niemand hat Schlucke zum Verteilen -> Prüfen ob jemand trinken muss
         let needsToDrink = false;
         const order = gs.playerOrder || [];
         for (const pid of order) {
@@ -1147,7 +1097,6 @@ async function handleRound1Choice(choice, gs) {
           });
           updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
         } else {
-          // Keiner verteilt, keiner trinkt -> Direkt zur nächsten Karte
           const nextCard = gs.currentRoundCard + 1;
           if (nextCard >= 4) updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
           else {
@@ -1229,7 +1178,6 @@ async function checkNextDistributor(gs, updates) {
 
   updates[`lobbies/${lobbyId}/game/distributionActive`] = false;
 
-  // Drunter & Drüber: Der Zug endet IMMER nach der Verteilung
   if (gs.gameType === 'drunterdrueber') {
     const nextIdx = (gs.currentPlayerIndex + 1) % gs.playerOrder.length;
     updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = nextIdx;
@@ -1272,18 +1220,15 @@ async function confirmSips() {
   try {
     const totalPlayers = lastGameState.playerOrder.length;
     
-    // Wir nutzen ein lokales Objekt für die Updates, um Race Conditions zu minimieren
     const updates = {};
     updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
 
-    // Prüfen, ob ich der Letzte bin, der bestätigt
     const currentConfirmedKeys = Object.keys(confirmedObj);
     const isLastOne = (currentConfirmedKeys.length + 1 >= totalPlayers);
 
     if (isLastOne) {
-      // Phase beenden
       updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
-      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null; // Node löschen statt leeres Objekt
+      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null; 
       
       if (lastGameState.phase === 'round1') {
         const nextRoundCard = lastGameState.currentRoundCard + 1;
@@ -1301,10 +1246,8 @@ async function confirmSips() {
         updates[`lobbies/${lobbyId}/game/busStep`] = 0;
       }
 
-      // Führt das Update für alle Phasen aus (Runde 1, Runde 2 Zwischenschritte und Runde 3)
       await update(ref(db), updates);
     } else {
-      // Nur meinen eigenen Status bestätigen
       updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
       await update(ref(db), updates);
     }
@@ -1347,7 +1290,7 @@ function renderRound2(gs, area) {
   const matchEndTime = gs.matchEndTime || 0;
   const timeLeft = Math.max(0, Math.ceil((matchEndTime - getServerNow()) / 1000));
 
-  // Step 1: Prep phase - players must flip cards
+  // Step 1
   if (!gs.players[myId].readyForRound2) {
     area.innerHTML = `
       <div class="choice-section">
@@ -1366,7 +1309,7 @@ function renderRound2(gs, area) {
   const allReady = gs.playerOrder.every(pid => gs.players[pid].readyForRound2);
   const giverId = gs.playerOrder[gs.distributionGiverIndex];
 
-  // Build pyramid rows: 6 cards = rows of 3,2,1; 10 cards = rows of 4,3,2,1
+  // Build pyramid rows
   const rows = buildPyramidRows(size);
   let flatIdx = 0;
   let html = '';
@@ -1382,7 +1325,6 @@ function renderRound2(gs, area) {
     html += `<div class="pyramid-row">`;
     for (let i = 0; i < rowSize; i++) {
       const card = pyramid[flatIdx];
-      // Schimmer auf der zuletzt aufgedeckten Karte
       const isCurrent = (flatIdx === pidx - 1 && (timeLeft > 0 || gs.distributionActive || gs.drinkingActive || (gs.matchEndTime && getServerNow() < gs.matchEndTime + 500)));
       const isDone = card.revealed || flatIdx < pidx;
       if (card.revealed) {
@@ -1401,7 +1343,7 @@ function renderRound2(gs, area) {
   }
   html += `</div></div>`;
 
-  // Distribution phase (same as R1)
+  // Distribution phase
   if (gs.distributionActive) {
     if (giverId === myId) {
       const pool = gs.players[myId].sipPool || 0;
@@ -1654,7 +1596,7 @@ async function startPyramidDistribution() {
     const gs = lastGameState;
     const updates = {};
     
-    // Prüfen, ob überhaupt jemand Schlucke zum Verteilen hat
+    // Prüfen, überhaupt jemand Schlucke zum Verteilen 
     let firstGiverIdx = -1;
     for (let i = 0; i < gs.playerOrder.length; i++) {
       const pid = gs.playerOrder[i];
@@ -1704,7 +1646,7 @@ async function autoLockMissedCards(gs) {
       }
     }
 
-    // Check if anyone has sips to distribute
+    // Check anyone sips to distribute
     let firstGiverIdx = -1;
     for (let i = 0; i < gs.playerOrder.length; i++) {
       if ((gs.players[gs.playerOrder[i]].sipPool || 0) > 0) {
@@ -1716,7 +1658,6 @@ async function autoLockMissedCards(gs) {
     for (const pid of gs.playerOrder) {
       const playerHandInUpdates = updates[`lobbies/${lobbyId}/game/players/${pid}/hand`];
       if (playerHandInUpdates) {
-        // Count cards that are now locked in playerHandInUpdates but were not locked in gs.players[pid].hand
         const newlyLockedCount = playerHandInUpdates.filter(c => c.locked && !(gs.players[pid].hand || []).some(origC => origC.value === c.value && origC.suit === c.suit && origC.locked)).length;
         if (newlyLockedCount > 0) {
           const sipsPerRow = gs.phase === 'round2' ? getSipsForRow(gs.pyramidIndex - 1, gs.pyramidSize) : 1;
@@ -1731,7 +1672,6 @@ async function autoLockMissedCards(gs) {
       updates[`lobbies/${lobbyId}/game/distributionActive`] = true;
       updates[`lobbies/${lobbyId}/game/distributionGiverIndex`] = firstGiverIdx;
     } else {
-      // Check if anyone needs to drink (from being locked/incorrect)
       let anyoneNeedsToDrink = gs.playerOrder.some(pid => (gs.players[pid].sipsToDrink || 0) > 0);
       if (anyoneNeedsToDrink) {
         updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
@@ -1745,7 +1685,6 @@ async function autoLockMissedCards(gs) {
         });
         updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
       } else if (gs.phase === 'tiebreaker' || gs.pyramidIndex >= gs.pyramid.length) {
-        // No distribution, no drinking -> Check if round ends
         await finishRound2(gs, updates);
         return;
       }
@@ -1774,7 +1713,7 @@ async function revealPyramidCard(gs) {
     if (hostTimerInterval) clearTimeout(hostTimerInterval);
     hostTimerInterval = setTimeout(() => {
       autoLockMissedCards(lastGameState);
-    }, 10000); // Exakt 10 Sekunden warten
+    }, 10000); 
 
     await update(ref(db), updates);
   } catch (e) {
@@ -1833,7 +1772,7 @@ async function finishRound2(gs, updates = {}) {
     toast(`🚌 ${gs.players[busfahrerId].name} ist der Busfahrer!`, 5000);
     await update(ref(db), updates);
   } else {
-    // TIE! Check for auto-loser (max cards but 0 active cards)
+    // TIE! Check for auto-loser
     const autoLoser = candidates.find(c => c.active === 0);
     if (autoLoser) {
       updates[`lobbies/${lobbyId}/game/busfahrerId`] = autoLoser.pid;
@@ -2038,7 +1977,7 @@ async function handleBusChoice(choice, gs) {
           [`lobbies/${lobbyId}/game/busCards`]: newBusCards,
           [`lobbies/${lobbyId}/game/busStep`]: step + 1,
           [`lobbies/${lobbyId}/game/takeOverRequest`]: null,
-          // Gastfahrer-Zustand bleibt wie er ist (Gast fährt weiter oder Hauptfahrer fährt weiter)
+          // Gastfahrer-Zustand bleibt wie er ist
         };
         await update(ref(db), updates);
         toast('✅ Richtig! Weiter...');
@@ -2050,10 +1989,8 @@ async function handleBusChoice(choice, gs) {
         [`lobbies/${lobbyId}/game/busCards`]: newBusCards
       });
 
-      // 2. Kurze Pause (1.5 Sekunden)
       await new Promise(r => setTimeout(r, 1000));
 
-      // 3. Jetzt erst das Trinken und den Rest triggern
       const sipsToDrink = (gs.players[myId]?.sipsToDrink || 0) + sips;
       const sipsTotal = (gs.players[myId]?.sipsTotal || 0) + sips;
       const confirmed = {};
@@ -2072,7 +2009,6 @@ async function handleBusChoice(choice, gs) {
 
       // Logik für den Wechsel:
       if (gs.pendingGuestDriverId) {
-        // Wenn jemand gewartet hat, übernimmt er JETZT für den Neustart
         updates[`lobbies/${lobbyId}/game/guestDriverId`] = gs.pendingGuestDriverId;
         updates[`lobbies/${lobbyId}/game/pendingGuestDriverId`] = null;
         const nextName = gs.players[gs.pendingGuestDriverId]?.name || 'Jemand';
@@ -2147,7 +2083,7 @@ function renderAllHands(gs) {
   let html = `<div class="players-hands">
     <div class="section-title">Karten auf der Hand</div>`;
   
-  // Eigene ID an den Anfang der Liste setzen
+  // Eigene ID Anfang der Liste
   const sortedPlayerOrder = [...gs.playerOrder].sort((a, b) => {
     if (a === myId) return -1;
     if (b === myId) return 1;

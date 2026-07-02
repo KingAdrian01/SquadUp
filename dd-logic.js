@@ -5,7 +5,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
   const isMyTurn = currentId === myId;
   const player = gs.players[currentId];
 
-  // Längste Reihe(n) ermitteln
+  // Längste Reihe ermitteln
   const rowLengths = (gs.rows || []).map(r => (r.left?.length || 0) + 1 + (r.right?.length || 0));
   const maxLen = Math.max(...rowLengths);
   const longestIndices = rowLengths.map((len, i) => len === maxLen ? i : -1).filter(i => i !== -1);
@@ -45,7 +45,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
       </div>`;
   });
 
-  // UI für das Verteilen von Schlucken
+  // UI Verteilen von Schlucken
   if (gs.distributionActive) {
     const giverId = gs.playerOrder[gs.distributionGiverIndex];
     if (giverId === myId) {
@@ -127,7 +127,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
 }
 
 export async function initDDGame(players, deck) {
-  // 3 Reihen mit je einer Karte starten
+  // 3 Reihen mit je einer Karte
   const rows = [
     { pivot: deck.shift(), left: [], right: [] },
     { pivot: deck.shift(), left: [], right: [] },
