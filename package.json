@@ -3,8 +3,14 @@
   "version": "1.0.0",
   "description": "SquadUp drinking game",
   "main": "app.js",
+  "scripts": {
+    "build": "node obfuscate.js"
+  },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^5.6.0"
   }
 }
