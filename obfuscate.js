@@ -2,6 +2,7 @@ const JavaScriptObfuscator = require('javascript-obfuscator');
 const fs = require('fs');
 const path = require('path');
 
+// 1. JavaScript-Dateien verschleiern
 const filesToObfuscate = ['app.js', 'dd-logic.js'];
 
 filesToObfuscate.forEach(file => {
@@ -25,3 +26,20 @@ filesToObfuscate.forEach(file => {
     console.log(`✅ ${file} erfolgreich verschleiert!`);
   }
 });
+
+// 2. CSS-Datei Kommentaren befreien und minifizieren
+const cssFile = 'style.css';
+const cssPath = path.join(__dirname, cssFile);
+if (fs.existsSync(cssPath)) {
+  let cssCode = fs.readFileSync(cssPath, 'utf8');
+
+  cssCode = cssCode.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  cssCode = cssCode
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([{}:;,])\s*/g, '$1')
+    .trim();
+
+  fs.writeFileSync(cssPath, cssCode, 'utf8');
+  console.log(`✅ ${cssFile} Kommentare entfernt & minifiziert!`);
+}
