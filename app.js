@@ -5,7 +5,7 @@ import { inject } from '@vercel/analytics';
 
 
 const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000; 
-const APP_VERSION = '2.2.1'; 
+const APP_VERSION = '2.2.2'; 
 
 // ── Deck Sachen ──────────────────────────────────────
 const SUITS = ['♥','♦','♠','♣'];
