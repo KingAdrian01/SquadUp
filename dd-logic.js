@@ -53,17 +53,13 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
       html += `
         <div class="choice-section highlight-border">
           <div class="choice-title">Schlucke verteilen! <i data-lucide="beer" class="icon-sm"></i></div>
-          <div class="choice-question">Du hast ${pool} Schlucke</div>
+          <div class="choice-question">Du hast ${pool} Schluck${pool === 1 ? '' : 'e'}</div>
           <div class="distribute-ui">
-            <select id="distribute-amount" class="sip-select">
-              ${Array.from({length: pool}, (_, i) => `<option value="${i+1}">${i+1}</option>`).join('')}
-            </select>
             <div class="distribute-grid">
               ${gs.playerOrder.filter(id => id !== myId).map(id => `
                 <button class="btn btn-secondary distribute-btn" data-target="${id}">${escHtml(gs.players[id].name)}</button>
               `).join('')}
             </div>
-            <button class="btn btn-link" onclick="window.skipDistribution()">Rest verfallen lassen</button>
           </div>
         </div>`;
     } else {
@@ -80,7 +76,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
         html += `
           <div class="choice-section">
             <div class="choice-title">Reihe ${gs.selectedRowIndex + 1} gewählt</div>
-            <div class="choice-question">Wo möchtest du anlegen?</div>
+            <div class="choice-question">Welche Seite?</div>
             <div class="choice-buttons">
               <button class="choice-btn" onclick="window.selectDDSide('left')"><i data-lucide="arrow-left"></i>Links</button>
               <button class="choice-btn" onclick="window.selectDDSide('right')"><i data-lucide="arrow-right"></i>Rechts</button>
@@ -119,8 +115,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
   if (gs.distributionActive && gs.playerOrder[gs.distributionGiverIndex] === myId) {
     area.querySelectorAll('.distribute-btn').forEach(btn => {
       btn.onclick = () => {
-        const amt = parseInt(document.getElementById('distribute-amount').value);
-        window.distributeSips(btn.dataset.target, amt, gs);
+        window.distributeSips(btn.dataset.target, 1, gs); // Immer fester Wert 1
       };
     });
   }

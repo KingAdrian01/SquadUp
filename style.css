@@ -1,30 +1,33 @@
 /* ===================================================
    BUSFAHRER – Style
-   Aesthetic: Dark Casino / Felt Table Noir
+   Aesthetic: Modern Apple Dark / iOS Design
 =================================================== */
 
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&display=swap');
+
 :root {
-  --bg: #0a0a0f;
-  --bg2: #12121a;
-  --bg3: #1a1a26;
-  --surface: #1e1e2e;
-  --surface2: #252538;
-  --border: rgba(255,255,255,0.08);
-  --border-bright: rgba(255,255,255,0.16);
-  --accent: #e8c96d;
-  --accent2: #c4a44a;
-  --red: #e05252;
-  --green: #52b788;
-  --text: #f0ede8;
-  --text-muted: #7a7a9a;
-  --text-dim: #4a4a6a;
-  --card-red: #e05252;
-  --card-black: #f0ede8;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 8px 32px rgba(0,0,0,0.6);
-  --font-display: 'Bebas Neue', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --bg: #000000;
+  --bg2: rgba(255, 255, 255, 0.05);
+  --bg3: rgba(255, 255, 255, 0.08);
+  --surface: rgba(255, 255, 255, 0.08);
+  --surface2: rgba(255, 255, 255, 0.12);
+  --border: rgba(255, 255, 255, 0.15);
+  --border-bright: rgba(255, 255, 255, 0.2);
+  --accent: #ffffff;
+  --accent2: #e8e8e8;
+  --red: #ff3b30;
+  --green: #34c759;
+  --text: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --text-dim: rgba(255, 255, 255, 0.4);
+  --card-red: #ff3b30;
+  --card-black: #ffffff;
+  --radius: 20px;
+  --radius-sm: 12px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.3);
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Syne', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Syne', sans-serif;
+  --blur: 20px;
 }
 
 * {
@@ -40,6 +43,8 @@ html, body {
   color: var(--text);
   font-family: var(--font-body);
   font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ===== SCREENS ===== */
@@ -123,15 +128,13 @@ html, body {
 }
 .logo {
   font-family: var(--font-display);
-  font-size: clamp(72px, 18vw, 108px);
+  font-size: clamp(40px, 18vw, 56px);
   line-height: 0.9;
   letter-spacing: 0.02em;
-  background: linear-gradient(135deg, var(--accent) 0%, #fff8e1 50%, var(--accent2) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--accent);
   text-shadow: none;
-  filter: drop-shadow(0 0 40px rgba(232,201,109,0.25));
+  filter: none;
+  font-weight: 700;
 }
 .logo-tagline {
   font-size: 13px;
@@ -174,23 +177,28 @@ html, body {
 }
 .mode-card {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   padding: 24px 16px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .mode-card:hover {
   border-color: var(--accent);
   background: var(--surface2);
   transform: translateY(-4px);
+  backdrop-filter: blur(calc(var(--blur) * 1.2));
 }
 .mode-icon { font-size: 40px; margin-bottom: 8px; }
 .mode-name { font-family: var(--font-display); font-size: 18px; letter-spacing: 0.05em; }
 
 .setup-box {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   padding: 20px;
   border-radius: var(--radius);
   border: 1px solid var(--border-bright);
@@ -203,9 +211,11 @@ html, body {
 }
 
 .select-trigger {
-  background: var(--bg3);
+  background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--accent);
-  border-radius: 24px;
+  border-radius: 50px;
   padding: 8px 18px;
   font-family: var(--font-display);
   font-size: 15px;
@@ -215,7 +225,7 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .chevron {
@@ -236,8 +246,10 @@ html, body {
   top: calc(100% + 8px);
   left: 0; right: 0;
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--accent);
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   opacity: 0;
@@ -260,8 +272,8 @@ html, body {
   transition: background 0.2s;
 }
 
-.option:hover { background: var(--bg3); color: var(--accent); }
-.option.selected { background: rgba(232, 201, 109, 0.1); color: var(--accent); }
+.option:hover { background: var(--surface); color: var(--accent); }
+.option.selected { background: var(--surface); color: var(--accent); border-left: 3px solid var(--accent); padding-left: calc(18px - 3px); }
 
 .lobby-code-banner {
   padding: 10px 0;
@@ -303,15 +315,17 @@ html, body {
 /* ===== INPUTS ===== */
 input[type="text"] {
   width: 100%;
-  background: var(--surface);
+  background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 50px;
   color: var(--text);
   font-family: var(--font-body);
   font-size: 16px;
   padding: 14px 18px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 input[type="text"]::placeholder { color: var(--text-dim); }
 input[type="text"]:focus { border-color: var(--accent); outline: none; }
@@ -330,17 +344,22 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   outline: none !important;
 }
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
-  color: #0a0a0f;
+  background: var(--accent);
+  color: #000000;
+  font-weight: 700;
+  border-radius: 50px;
 }
-.btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
-.btn-primary:active { transform: translateY(0); filter: brightness(0.95); }
+.btn-primary:hover { background: rgba(255, 255, 255, 0.9); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); background: rgba(255, 255, 255, 0.8); }
 .btn-secondary {
   background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   color: var(--text);
   border: 1.5px solid var(--border-bright);
+  border-radius: 50px;
 }
-.btn-secondary:hover { background: var(--bg3); border-color: var(--accent); }
+.btn-secondary:hover { background: var(--surface); border-color: var(--accent); }
 .btn-large { width: 100%; padding: 16px; font-size: 16px; }
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 
@@ -372,7 +391,9 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: var(--bg);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
@@ -398,7 +419,9 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 }
 
 .btn-back {
-  background: var(--surface);
+  background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text);
@@ -414,10 +437,12 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   gap: 6px; 
   vertical-align: middle; 
 }
-.btn-back:hover { border-color: var(--accent); }
+.btn-back:hover { border-color: var(--accent); background: var(--surface); }
 
 .btn-icon {
-  background: var(--surface);
+  background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
@@ -446,7 +471,7 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   width: 18px; 
   height: 18px;
   display: block;
-  filter: brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(5deg); 
+  filter: none; 
 }
 
 .copy-container {
@@ -472,6 +497,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 
 .pyramid-selector {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px 18px;
@@ -489,21 +516,24 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 }
 .pill {
   flex: 1;
-  background: var(--bg3);
+  background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 50px;
   color: var(--text-muted);
   font-family: var(--font-body);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   padding: 10px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .pill.active {
-  background: rgba(232,201,109,0.12);
+  background: var(--accent);
   border-color: var(--accent);
-  color: var(--accent);
+  color: #000000;
+  font-weight: 700;
 }
 
 .player-list {
@@ -514,6 +544,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 
 .player-card {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 18px;
@@ -575,28 +607,39 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  background: var(--bg);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 10;
   gap: 10px;
+  position: relative;
 }
 .game-header-status {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  text-align: center;
+  pointer-events: none;
 }
 .phase-badge {
   font-family: var(--font-display);
   font-size: 20px;
   letter-spacing: 0.05em;
   color: var(--accent);
-  background: rgba(232,201,109,0.1);
-  border: 1px solid rgba(232,201,109,0.25);
-  border-radius: 20px;
-  padding: 4px 16px;
+  background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--border-bright);
+  border-radius: 50px;
+  padding: 8px 20px;
+  font-weight: 600;
 }
 .current-player-badge {
   font-size: 13px;
@@ -630,8 +673,10 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .card {
   width: 64px;
   height: 90px;
-  border-radius: 10px;
+  border-radius: 16px;
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--border-bright);
   display: flex;
   flex-direction: column;
@@ -646,8 +691,10 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 .card.face-down {
-  background: linear-gradient(135deg, #1a1a30 0%, #0e0e1a 100%);
-  border-color: var(--border);
+  background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-color: var(--border-bright);
 }
 .card.face-down::before {
   content: '?';
@@ -660,16 +707,16 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .card.black { color: var(--card-black); }
 .card.highlight {
   border-color: var(--accent);
-  box-shadow: 0 0 20px rgba(232,201,109,0.4);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
   transform: translateY(-4px);
 }
 .card.glow-green {
   border-color: var(--green);
-  box-shadow: 0 0 20px rgba(82,183,136,0.4);
+  box-shadow: 0 0 20px rgba(52, 199, 89, 0.4);
 }
 .card.glow-red {
   border-color: var(--red);
-  box-shadow: 0 0 20px rgba(224,82,82,0.35);
+  box-shadow: 0 0 20px rgba(255, 59, 48, 0.35);
 }
 .card.locked, .card-sm.locked {
   filter: grayscale(1) opacity(0.5);
@@ -724,6 +771,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 /* ===== CHOICE AREA ===== */
 .choice-section {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
@@ -753,16 +802,18 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .choice-btn {
   flex: 1; 
   min-width: 120px; 
-  background: var(--bg3);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1.5px solid var(--border-bright);
+  border-radius: 50px;
   color: var(--text);
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 15px;
   padding: 16px 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   outline: none !important;
   display: flex; 
   flex-direction: column; 
@@ -772,8 +823,9 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .choice-btn:hover:not(:disabled), .choice-btn:focus {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(232,201,109,0.08);
+  background: var(--surface);
   transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(255, 255, 255, 0.1);
 }
 .choice-btn:active:not(:disabled) { transform: translateY(0); }
 .choice-btn i {
@@ -784,13 +836,17 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .choice-btn:disabled { opacity: 0.5; pointer-events: none; }
 .choice-btn.selected-correct {
   border-color: var(--green);
-  background: rgba(82,183,136,0.12);
+  background: rgba(52, 199, 89, 0.15);
   color: var(--green);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
 }
 .choice-btn.selected-wrong {
   border-color: var(--red);
-  background: rgba(224,82,82,0.12);
+  background: rgba(255, 59, 48, 0.15);
   color: var(--red);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
 }
 
 /* Standard-Buttons in Auswahl-Sektionen */
@@ -802,6 +858,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 /* ===== HAND DISPLAY ===== */
 .hand-section {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px;
@@ -823,6 +881,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 }
 .player-hand-row {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
@@ -838,12 +898,13 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 }
 .sip-count-badge {
   background: var(--red);
-  color: white;
+  color: #ffffff;
   padding: 4px 10px;
-  border-radius: 20px;
+  border-radius: 50px;
   font-weight: 800;
   font-size: 13px;
   animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
 }
 .player-hand-name {
   font-weight: 600;
@@ -855,20 +916,27 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 
 .sip-select {
   width: 100%;
-  background: var(--bg3);
+  background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--accent);
   color: var(--text);
   padding: 12px;
-  border-radius: var(--radius);
+  border-radius: 50px;
   margin-bottom: 15px;
   font-size: 18px;
   text-align: center;
+  font-weight: 600;
+  font-family: var(--font-display);
 }
 
 .drinking-popup {
   text-align: center;
-  background: linear-gradient(180deg, var(--surface2) 0%, var(--bg2) 100%);
+  background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 2px solid var(--accent);
+  border-radius: var(--radius);
 }
 .drinking-emoji { font-size: 64px; margin-bottom: 10px; }
 #drinking-count { font-size: 80px; font-family: var(--font-display); color: var(--accent); line-height: 1; }
@@ -912,8 +980,10 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .card-sm {
   width: 42px;
   height: 58px;
-  border-radius: 7px;
-  background: var(--bg3);
+  border-radius: 10px;
+  background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border-bright);
   display: flex;
   flex-direction: column;
@@ -932,6 +1002,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 /* ===== PYRAMID ===== */
 .pyramid-section {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
@@ -958,8 +1030,10 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 .pyramid-card {
   width: 56px;
   height: 78px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #1a1a30 0%, #0e0e1a 100%);
+  border-radius: 12px;
+  background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -980,7 +1054,7 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   border: 4px solid var(--accent) !important;
   transform: scale(1.15) translateY(-8px);
   z-index: 5;
-  box-shadow: 0 12px 30px rgba(232,201,109,0.6), 0 0 60px rgba(232,201,109,0.2);
+  box-shadow: 0 12px 30px rgba(255, 255, 255, 0.6), 0 0 60px rgba(255, 255, 255, 0.2);
   filter: brightness(1.1);
   animation: cardRevealPop 0.4s ease-out;
 }
@@ -989,8 +1063,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   100% { transform: rotateY(0deg) scale(1.15) translateY(-8px); opacity: 1; }
 }
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 20px rgba(232,201,109,0.5); }
-  50% { box-shadow: 0 0 35px rgba(232,201,109,0.8); }
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.5); }
+  50% { box-shadow: 0 0 35px rgba(255, 255, 255, 0.8); }
 }
 .pyramid-card.revealed {
   animation: cardReveal 0.4s ease;
@@ -1026,6 +1100,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 /* ===== RESULT OVERLAY ===== */
 .result-overlay {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 24px;
@@ -1045,6 +1121,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 /* ===== BUSFAHRER (R3) ===== */
 .bus-section {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
@@ -1073,8 +1151,10 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 2px solid var(--border);
-  background: var(--bg3);
+  border: 2px solid var(--border-bright);
+  background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1083,20 +1163,25 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 }
 .bus-step.done {
   border-color: var(--green);
-  background: rgba(82,183,136,0.15);
+  background: rgba(52, 199, 89, 0.15);
 }
 .bus-step.current {
   border-color: var(--accent);
-  background: rgba(232,201,109,0.12);
+  background: rgba(255, 255, 255, 0.15);
   animation: pulse2 1s infinite;
 }
 @keyframes pulse2 {
-  0%, 100% { box-shadow: 0 0 8px rgba(232,201,109,0.4); }
-  50% { box-shadow: 0 0 20px rgba(232,201,109,0.7); }
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.7); }
+}
+@keyframes popIn {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
 }
 .bus-step.fail {
   border-color: var(--red);
-  background: rgba(224,82,82,0.15);
+  background: rgba(255, 59, 48, 0.15);
 }
 .bus-revealed-cards {
   display: flex;
@@ -1116,6 +1201,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 }
 .dd-row {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   padding: 12px;
@@ -1168,10 +1255,9 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 
 .sip-pool-badge {
   background: var(--accent);
-  color: var(--bg);
-  /* ... (restliche Styles bleiben gleich) ... */
-  padding: 2px 10px;
-  border-radius: 20px;
+  color: #000000;
+  padding: 2px 12px;
+  border-radius: 50px;
   font-weight: 800;
   font-size: 13px;
   margin-left: 10px;
@@ -1179,7 +1265,7 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   align-items: center;
   gap: 4px;
   animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 0 10px rgba(232,201,109,0.4);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
 }
 
 /* Utility für Buttons mit inline Icons */
@@ -1210,11 +1296,9 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   font-family: var(--font-display);
   font-size: 52px;
   letter-spacing: 0.04em;
-  background: linear-gradient(135deg, var(--accent) 0%, #fff8e1 50%, var(--accent2) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--accent);
   margin-bottom: 8px;
+  font-weight: 700;
 }
 .end-subtitle { color: var(--text-muted); font-size: 15px; margin-bottom: 28px; }
 .end-rankings {
@@ -1226,6 +1310,8 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 }
 .rank-row {
   background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 18px;
@@ -1252,8 +1338,10 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
   left: 50%;
   transform: translateX(-50%) translateY(20px);
   background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border-bright);
-  border-radius: 30px;
+  border-radius: 50px;
   padding: 12px 24px;
   font-weight: 600;
   font-size: 14px;
@@ -1294,8 +1382,10 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 }
 .modal-box {
   background: var(--bg2);
+  backdrop-filter: blur(calc(var(--blur) * 1.5));
+  -webkit-backdrop-filter: blur(calc(var(--blur) * 1.5));
   border: 1px solid var(--border-bright);
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 28px 24px;
   width: 100%;
   max-width: 440px;
@@ -1322,7 +1412,9 @@ input[type="text"]:focus { border-color: var(--accent); outline: none; }
 }
 textarea {
   width: 100%;
-  background: var(--surface);
+  background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   border: 1.5px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
@@ -1332,7 +1424,7 @@ textarea {
   outline: none;
   resize: vertical;
   min-height: 150px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 textarea:focus { border-color: var(--accent); }
 
@@ -1345,8 +1437,10 @@ textarea:focus { border-color: var(--accent); }
   margin-bottom: 12px;
 }
 .info-box {
-  background: rgba(232,201,109,0.07);
-  border: 1px solid rgba(232,201,109,0.2);
+  background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 12px 16px;
   font-size: 13px;
@@ -1354,7 +1448,7 @@ textarea:focus { border-color: var(--accent); }
   line-height: 1.5;
   text-align: center;
 }
-.info-box strong { color: var(--text); } /* Textfarbe im Info-Box */
+.info-box strong { color: var(--text); }
 
 /* ===== SCROLLBAR ===== */
 ::-webkit-scrollbar { width: 4px; }
@@ -1394,4 +1488,556 @@ textarea:focus { border-color: var(--accent); }
 @keyframes dot {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
   40% { transform: scale(1); opacity: 1; }
+}
+
+/* ============================================================
+   LOBBY SCREEN - iOS MODERN GLASS SYSTEM
+   ============================================================ */
+
+#screen-lobby {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100dvh; /* Reagiert dynamisch auf Browser-/Systemleisten */
+  padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 20px) 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+#screen-lobby.active {
+  display: flex !important;
+}
+
+/* Symmetrischer Header */
+.lobby-header-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.lobby-title-sub {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: var(--text-dim, rgba(255, 255, 255, 0.4));
+}
+
+/* Scrollbarer Content-Bereich */
+.lobby-content-scroll {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 12px;
+}
+
+.lobby-content-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* iOS Segmented Control für Spielmodus */
+.mode-segmented-control {
+  display: flex;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  padding: 4px;
+  gap: 4px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.mode-segmented-control.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.segment-btn {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  padding: 10px 14px !important;
+  border-radius: 14px !important;
+  cursor: pointer;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.segment-btn.active {
+  background: #ffffff !important;
+  color: #000000 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Lobby Code Card */
+.lobby-code-card {
+  background: rgba(28, 28, 30, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 14px 16px;
+  text-align: center;
+  backdrop-filter: blur(24px);
+}
+
+.lobby-label, .card-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-dim, rgba(255, 255, 255, 0.45));
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.lobby-code-text {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 0.25em;
+  color: #ffffff;
+  cursor: pointer;
+  user-select: all;
+}
+
+/* Settings & Pyramid Selector Card */
+.settings-card {
+  background: rgba(28, 28, 30, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 14px 16px;
+  backdrop-filter: blur(24px);
+}
+
+.pill-selector {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.pill-selector .pill {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 14px !important;
+  padding: 10px !important;
+  font-size: 14px !important;
+}
+
+.pill-selector .pill.active {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+}
+
+/* Spieler-Liste */
+.players-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.players-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Fixierter Bottom-Bar Bereich */
+.lobby-bottom-bar {
+  padding-top: 10px;
+  width: 100%;
+}
+
+.lobby-bottom-bar .w-full {
+  width: 100%;
+}
+
+.waiting-text {
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
+  padding: 12px 0;
+}
+
+/* ============================================================
+   KARTEN & LOBBYCODE: MONOSPACE, ECHTE FARBEN & KEINE COLOR-EMOJIS
+   ============================================================ */
+
+/* 1. Lobby-Code: Feste Zeichenbreite, kein Springen */
+#lobby-code-display,
+.lobby-code-text {
+  font-family: "SF Mono", "Roboto Mono", Menlo, Consolas, monospace !important;
+  font-variant-numeric: tabular-nums !important;
+  font-feature-settings: "tnum" !important;
+  letter-spacing: 0.22em !important;
+}
+
+/* 2. Basis für alle Spielkarten */
+.card,
+.card-sm,
+.pyramid-card {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
+/* 3. Kartenwerte (Zahlen / Buchstaben): Tabular Numbers */
+.card .card-value,
+.card-sm .card-value,
+.pyramid-card .card-value {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif !important;
+  font-variant-numeric: tabular-nums !important;
+  font-feature-settings: "tnum" !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  display: inline-block !important;
+  width: 100% !important;
+  text-align: center !important;
+}
+
+.card .card-value[data-val="10"],
+.card-sm .card-value[data-val="10"] {
+  letter-spacing: -2px !important;
+}
+
+/* 4. Kartensymbole: Zwingt reine Monochrome-Zeichen (KEIN 3D-Emoji-Font!) */
+.card .card-suit,
+.card-sm .card-suit,
+.pyramid-card .card-suit {
+  font-family: "Segoe UI Symbol", "Apple Symbols", Arial, sans-serif !important;
+  line-height: 1 !important;
+  font-style: normal !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 5. Größenabstimmung */
+.card .card-value { font-size: 28px !important; margin-bottom: 2px !important; }
+.card .card-suit  { font-size: 26px !important; }
+
+.card-sm .card-value { font-size: 20px !important; margin-bottom: 1px !important; }
+.card-sm .card-suit  { font-size: 19px !important; }
+
+.pyramid-card.revealed .card-value { font-size: 22px !important; margin-bottom: 1px !important; }
+.pyramid-card.revealed .card-suit  { font-size: 20px !important; }
+
+/* 6. Farb-Fix: Echtes Apple-Rot & sattes Weiß (kein lila oder pink Schimmer mehr) */
+.card.red, .card-sm.red, .pyramid-card.red {
+  color: #ff3b30 !important;
+}
+.card.red .card-suit, .card-sm.red .card-suit, .pyramid-card.red .card-suit {
+  color: #ff3b30 !important;
+}
+
+.card.black, .card-sm.black, .pyramid-card.black {
+  color: #f5f5f7 !important;
+}
+.card.black .card-suit, .card-sm.black .card-suit, .pyramid-card.black .card-suit {
+  color: #f5f5f7 !important;
+}
+
+/* ============================================================
+   DRUNTER & DRÜBER: KOMPAKTERES LAYOUT (TASKBAR-SAFE)
+   ============================================================ */
+
+/* Kopfzeile mit "REIHE X" und "X KARTEN" komplett verbergen */
+.dd-row-header {
+  display: none !important;
+}
+
+/* Kachel schlanker machen */
+.dd-row {
+  padding: 8px 12px !important;
+  margin-bottom: 8px !important;
+  min-height: auto !important;
+}
+
+/* Kartenbereich vertikal zentrieren & kompakt halten */
+.dd-row-cards {
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Gesamtes Grid straffen */
+.dd-grid {
+  gap: 6px !important;
+}
+
+/* ============================================================
+   HEADER & BUSFAHRER SCREEN POLISH (CLEAN & NO OVERLAP)
+   ============================================================ */
+
+/* 1. Game Header Leiste: Kein Überlappen mehr */
+.game-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* Status-Container in der Mitte sauber ausrichten & Platz geben */
+.game-status-bar,
+.game-meta {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  text-align: center !important;
+}
+
+#current-player-badge,
+#round-progress {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
+  font-size: 12px !important;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5)) !important;
+}
+
+#current-player-badge strong {
+  color: var(--text, #ffffff) !important;
+}
+
+/* Modus-Badge links etwas kompakter halten */
+.game-header .custom-select,
+.game-header .btn-back {
+  flex-shrink: 0 !important;
+}
+
+/* 2. Busfahrer Phase: Weg mit dem knallroten Error-Look */
+.bus-title {
+  color: #ffffff !important; /* Sauberes, klares Weiß */
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  margin-bottom: 6px !important;
+}
+
+/* Subtitle dezenter gestalten */
+.bus-subtitle {
+  font-size: 14px !important;
+  color: var(--text-muted, rgba(255, 255, 255, 0.6)) !important;
+  margin-bottom: 16px !important;
+}
+
+/* Schluck-Pill auf den Pyramidenkarten korrigieren */
+.pyramid-card .sip-badge {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ============================================================
+   BUSFAHRER PHASE: HEADER AUSBLENDEN FÜR MAXIMALEN PLATZ
+   ============================================================ */
+
+#screen-game.hide-game-header .game-header {
+  display: none !important;
+}
+
+#screen-game.hide-game-header #game-area {
+  padding-top: 8px !important;
+}
+
+/* ============================================================
+   DRUNTER & DRÜBER: DER PERFEKTE FÄCHER AB 6+ KARTEN
+   ============================================================ */
+
+.dd-row-cards {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  padding: 4px 0 !important;
+  box-sizing: border-box !important;
+  gap: 6px !important; /* Standardabstand, wenn unter 6 Karten */
+}
+
+.dd-side-left,
+.dd-side-right,
+.dd-pivot-card {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Feste Kartengröße */
+.dd-row-cards .card-sm {
+  width: 52px !important;
+  min-width: 52px !important;
+  max-width: 52px !important;
+  height: 74px !important;
+  background: #1c1c1e !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5) !important;
+  flex-shrink: 0 !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* Pivot-Karte liegt im Hintergrund unter den angrenzenden Karten */
+.dd-pivot-card {
+  z-index: 1 !important;
+}
+
+/* Basis-Ausrichtung für wenige Karten */
+.dd-side-left {
+  flex-direction: row !important;
+}
+.dd-side-right {
+  flex-direction: row !important;
+}
+
+
+/* ============================================================
+   FÄCHER-MODUS: GREIFT AB 6+ KARTEN (Wenn Seiten ausgebaut sind)
+   ============================================================ */
+
+.dd-row:has(.dd-side-left .card-sm:nth-child(3)) .dd-row-cards,
+.dd-row:has(.dd-side-right .card-sm:nth-child(3)) .dd-row-cards,
+.dd-row:has(.dd-side-left .card-sm:nth-child(2)):has(.dd-side-right .card-sm:nth-child(2)) .dd-row-cards {
+  gap: 0 !important;
+}
+
+.dd-row:has(.dd-side-left .card-sm:nth-child(3)) .dd-side-left,
+.dd-row:has(.dd-side-right .card-sm:nth-child(3)) .dd-side-left,
+.dd-row:has(.dd-side-left .card-sm:nth-child(3)) .dd-side-right,
+.dd-row:has(.dd-side-right .card-sm:nth-child(3)) .dd-side-right,
+.dd-row:has(.dd-side-left .card-sm:nth-child(2)):has(.dd-side-right .card-sm:nth-child(2)) .dd-side-left,
+.dd-row:has(.dd-side-left .card-sm:nth-child(2)):has(.dd-side-right .card-sm:nth-child(2)) .dd-side-right {
+  gap: 0 !important;
+}
+
+/* LINKE SEITE im Fächer-Modus: row-reverse, damit von innen nach außen gefächert wird 
+   und die rechte Seite jeder Karte über der linken der vorherigen liegt */
+.dd-row:has(.dd-side-left .card-sm:nth-child(3)) .dd-side-left,
+.dd-row:has(.dd-side-right .card-sm:nth-child(3)) .dd-side-left,
+.dd-row:has(.dd-side-left .card-sm:nth-child(2)):has(.dd-side-right .card-sm:nth-child(2)) .dd-side-left {
+  flex-direction: row-reverse !important;
+}
+
+.dd-row:has(.dd-side-left .card-sm:nth-child(3)) .dd-side-left .card-sm,
+.dd-row:has(.dd-side-right .card-sm:nth-child(3)) .dd-side-left .card-sm,
+.dd-row:has(.dd-side-left .card-sm:nth-child(2)):has(.dd-side-right .card-sm:nth-child(2)) .dd-side-left .card-sm {
+  margin-right: -18px !important;
+  margin-left: 0 !important;
+}
+
+/* RECHTE SEITE im Fächer-Modus: Normales 'row' mit negativem linken Margin, 
+   fächert ebenfalls von innen nach außen auf */
+.dd-row:has(.dd-side-left .card-sm:nth-child(3)) .dd-side-right .card-sm,
+.dd-row:has(.dd-side-right .card-sm:nth-child(3)) .dd-side-right .card-sm,
+.dd-row:has(.dd-side-left .card-sm:nth-child(2)):has(.dd-side-right .card-sm:nth-child(2)) .dd-side-right .card-sm {
+  margin-left: -18px !important;
+  margin-right: 0 !important;
+}
+
+/* ============================================================
+   FLOATING BACK-BUTTON & TOPBAR AUSBLENDEN
+   ============================================================ */
+
+/* 1. Header-Container selbst nicht löschen, sondern Höhe auf 0 setzen */
+#screen-game .game-header {
+  display: block !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  position: relative !important;
+}
+
+/* 2. Modus-Dropdown und mittlere Titel-Texte im Header komplett ausblenden */
+#screen-game #mode-select-game,
+#screen-game .game-header .game-meta,
+#screen-game .game-header .game-status-bar,
+#screen-game #phase-badge {
+  display: none !important;
+}
+
+/* 3. Zurück-Button: Schwebend oben links (nimmt 0px Zeilenhöhe weg) */
+#screen-game #btn-back-game {
+  display: flex !important;
+  position: absolute !important;
+  top: 14px !important;
+  left: 14px !important;
+  width: 38px !important;
+  height: 38px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #f5f5f7 !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 9999 !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  cursor: pointer !important;
+}
+
+#screen-game #btn-back-game:active {
+  transform: scale(0.92);
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* 4. Padding für das Spielfeld */
+#screen-game #game-area {
+  padding-top: 30px !important;
+}
+
+/* ============================================================
+   SIP-POOL BADGE: PERFEKTE VERTIKALE AUSRICHTUNG ZUM TEXT
+   ============================================================ */
+
+.current-player-badge {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+}
+
+#sip-pool-target,
+.sip-pool-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
+  transform: translateY(1px) !important; /* Feinjustierung für die exakte Symmetrie */
+  margin: 0 !important;
 }
