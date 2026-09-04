@@ -1,8 +1,10 @@
-import { VALUE_ORDER, escHtml, cardHTML, toast } from './app.js';
+import { VALUE_ORDER, cardHTML, escHtml } from './busfahrer.js';
+import { toast } from './app.js';
+import { state } from './state.js';
 
-export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, passTurn) {
+export function renderDrunterDrueber(gs, area, handleChoice, selectRow, passTurn) {
   const currentId = gs.playerOrder[gs.currentPlayerIndex];
-  const isMyTurn = currentId === myId;
+  const isMyTurn = currentId === state.myId;
   const player = gs.players[currentId];
 
   // Längste Reihe ermitteln
@@ -26,7 +28,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
 
     html += `
       <div class="dd-row ${isSelectable ? 'selectable' : ''} ${isActive ? 'active-selection' : ''}" 
-           onclick="${isSelectable ? `window.selectDDRow(${idx})` : ''}">
+            onclick="${isSelectable ? `window.selectDDRow(${idx})` : ''}">
         <div class="dd-row-header">
           <span>Reihe ${idx + 1} ${isLongest ? '<i data-lucide="flame" style="color:var(--accent);width:12px;height:12px;"></i>' : ''}</span>
           <span>${rowLen} Karten</span>
@@ -48,15 +50,15 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
   // UI Verteilen von Schlucken
   if (gs.distributionActive) {
     const giverId = gs.playerOrder[gs.distributionGiverIndex];
-    if (giverId === myId) {
-      const pool = gs.players[myId].sipPool || 0;
+    if (giverId === state.myId) {
+      const pool = gs.players[state.myId].sipPool || 0;
       html += `
         <div class="choice-section highlight-border">
           <div class="choice-title">Schlucke verteilen! <i data-lucide="beer" class="icon-sm"></i></div>
           <div class="choice-question">Du hast ${pool} Schluck${pool === 1 ? '' : 'e'}</div>
           <div class="distribute-ui">
             <div class="distribute-grid">
-              ${gs.playerOrder.filter(id => id !== myId).map(id => `
+              ${gs.playerOrder.filter(id => id !== state.myId).map(id => `
                 <button class="btn btn-secondary distribute-btn" data-target="${id}">${escHtml(gs.players[id].name)}</button>
               `).join('')}
             </div>
@@ -112,7 +114,7 @@ export function renderDrunterDrueber(gs, area, myId, handleChoice, selectRow, pa
   if (window.lucide) window.lucide.createIcons();
 
   // Listener für Verteil-Buttons anhängen
-  if (gs.distributionActive && gs.playerOrder[gs.distributionGiverIndex] === myId) {
+  if (gs.distributionActive && gs.playerOrder[gs.distributionGiverIndex] === state.myId) {
     area.querySelectorAll('.distribute-btn').forEach(btn => {
       btn.onclick = () => {
         window.distributeSips(btn.dataset.target, 1, gs); // Immer fester Wert 1

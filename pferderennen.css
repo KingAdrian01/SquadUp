@@ -1,0 +1,379 @@
+/* ===================================================
+    PFERDERENNEN – Style (Erweiterung)
+=================================================== */
+
+.pferderennen-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: calc(100% + 40px);
+  /* Bricht aus dem 20px padding aus */
+  margin-left: -20px;
+  margin-right: -20px;
+  margin-top: 24px;
+  /* Abstand zum Zurück-Button */
+  padding: 10px 4px;
+  max-width: 100vw;
+}
+
+/* ===================================================
+    PFERDERENNEN – Neues 4-Spur Layout
+=================================================== */
+
+.pferderennen-track-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 402px;
+  /* Fast Screen-Breite */
+  margin: 0 auto;
+  /* Verhindert horizontales Scrollen, aber overflow visible lassen für Stern */
+  overflow: visible;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 4px;
+  /* Weniger Padding für mehr Platz */
+  box-shadow: var(--shadow);
+}
+
+/* Oben: Rennticker */
+.rennticker-row {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  /* 8 gleich große Spalten (inkl. GO) */
+  gap: 0;
+  /* Kein Gap, damit es synchron zur Strecke bleibt */
+  align-items: center;
+  margin-bottom: 8px;
+  margin-left: 4px;
+  /* Ausgleich für den 4px linken Rand der Spuren */
+  margin-right: 14px;
+  /* Ausgleich für die 14px Ziellinie rechts */
+}
+
+.rennticker-field {
+  height: 40px;
+  width: 85%;
+  /* Karte etwas schmaler als die Grid-Zelle */
+  margin: 0 auto;
+  /* Zentriert in der Zelle */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+  border: 1px solid var(--border-bright);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--text-muted);
+}
+
+/* Die 4 Spuren Container */
+.lanes-wrapper {
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 6px;
+  border-radius: 8px;
+  overflow: visible;
+  border: 2px solid var(--border-bright);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.lane-row {
+  display: flex;
+  height: 64px;
+  /* Höhere Spuren (60-65px) */
+  position: relative;
+  background-color: #1c4827;
+  /* Satteres Fußballplatz-Grün (Bahn 1 & 3) */
+}
+
+/* Abwechselnde Rasenfarben */
+.lane-row:nth-child(even) {
+  background-color: #235730;
+  /* Satteres Fußballplatz-Grün (Bahn 2 & 4) */
+}
+
+/* Kante links in Symbolfarbe */
+.lane-row[data-horse="♥"] {
+  border-left: 4px solid #ff3b30;
+}
+
+.lane-row[data-horse="♦"] {
+  border-left: 4px solid #ff3b30;
+}
+
+.lane-row[data-horse="♠"] {
+  border-left: 4px solid #ffffff;
+}
+
+.lane-row[data-horse="♣"] {
+  border-left: 4px solid #ffffff;
+}
+
+/* Track Area (wo das Pferd läuft) */
+.track-area {
+  flex-grow: 1;
+  position: relative;
+  display: flex;
+}
+
+/* Das Hintergrund-Grid für die Streckenabschnitte */
+.track-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  pointer-events: none;
+}
+
+.track-grid-col {
+  border-right: 2px dashed rgba(255, 255, 255, 0.25);
+}
+
+.track-grid-col:last-child {
+  border-right: none;
+}
+
+/* Watermark am Start (Feld 1) */
+.watermark-symbol {
+  position: absolute;
+  top: 50%;
+  left: calc(100% / 16);
+  /* Zentrum des 1. Feldes (1/8 -> Mitte 1/16) */
+  transform: translate(-50%, -50%) scale(1);
+  font-size: 32px;
+  opacity: 1;
+  /* Dauerhaft mit voller Deckkraft */
+  z-index: 1;
+  font-weight: bold;
+  transition: transform 0.3s ease, top 0.3s ease;
+}
+
+.watermark-symbol[data-horse="♥"],
+.watermark-symbol[data-horse="♦"] {
+  color: #ff3b30;
+}
+
+.watermark-symbol[data-horse="♠"],
+.watermark-symbol[data-horse="♣"] {
+  color: #ffffff;
+}
+
+/* Ziellinie */
+.finish-line {
+  width: 14px;
+  flex-shrink: 0;
+  background-image:
+    linear-gradient(45deg, #000 25%, transparent 25%),
+    linear-gradient(-45deg, #000 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #000 75%),
+    linear-gradient(-45deg, transparent 75%, #000 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+  background-color: #fff;
+  border-left: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 0 6px 6px 0;
+  z-index: 2;
+}
+
+/* Die Spielfigur (Pferd) */
+.horse-figure {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%) scale(1);
+  width: calc(100% / 8);
+  /* Jedes Segment ist 1/8 der Breite */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: left 0.4s ease-out, transform 0.3s ease, top 0.3s ease, width 0.3s ease;
+}
+
+/* Siegerpferd über die Ziellinie schieben */
+.horse-figure[data-finished="true"] {
+  width: 32px !important;
+  left: calc(100% + 4px) !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 20 !important;
+}
+
+.horse-figure svg {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: block;
+  fill: currentColor;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.horse-figure[data-horse="♥"],
+.horse-figure[data-horse="♦"] {
+  color: #ff3b30;
+}
+
+.horse-figure[data-horse="♠"],
+.horse-figure[data-horse="♣"] {
+  color: #ffffff;
+}
+
+/* Animationsklasse beim Vorrücken */
+.horse-figure.jump {
+  animation: horseJump 0.4s ease-out;
+}
+
+@keyframes horseJump {
+  0% {
+    transform: translateY(-50%) rotate(0deg) scale(1);
+  }
+
+  40% {
+    transform: translateY(calc(-50% - 4px)) rotate(-3deg) scale(1);
+  }
+
+  100% {
+    transform: translateY(-50%) rotate(0deg) scale(1);
+  }
+}
+
+/* Stacking am Start (Feld 1) */
+.lane-row.is-at-start .watermark-symbol {
+  top: 30%;
+  transform: translate(-50%, -50%) scale(0.75);
+}
+
+.lane-row.is-at-start .horse-figure {
+  top: 70%;
+  transform: translateY(-50%) scale(0.75);
+}
+
+/* Stern-Badge über dem eigenen Pferd */
+.horse-star {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: gold;
+  line-height: 1;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  z-index: 5;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+/* Stern auf Feld 1 verstecken */
+.lane-row.is-at-start .horse-star {
+  opacity: 0;
+}
+
+/* Wett-Phase / Buttons */
+.pferderennen-bet-phase {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.pferderennen-bet-phase button {
+  background: var(--surface2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1.5px solid var(--border-bright);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 24px;
+  padding: 16px 24px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow);
+}
+
+.pferderennen-bet-phase button:hover {
+  border-color: var(--accent);
+  background: var(--surface);
+  transform: translateY(-2px);
+}
+
+/* Freistehende Aktions-Box unter der Rennbahn */
+.floating-control-bar {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 402px;
+  margin: 0 auto;
+}
+
+/* Container für die gezogene Karte (scrollbare Historie) */
+.drawn-cards-history {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  padding: 4px 6px;
+  margin-top: 10px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  /* Scrollbar dezent verstecken */
+}
+
+.drawn-cards-history::-webkit-scrollbar {
+  display: none;
+}
+
+.drawn-card {
+  width: 42px;
+  height: 60px;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display), sans-serif;
+  font-weight: bold;
+  font-size: 16px;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.drawn-card.card-red {
+  color: #ff3b30;
+}
+
+.drawn-card.card-black {
+  color: #000000;
+}
+
+.drawn-card.card-placeholder {
+  background: var(--surface2);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.3);
+  box-shadow: none;
+}
+
+.drawn-card .card-rank {
+  font-size: 18px;
+}
+
+.drawn-card .card-suit {
+  font-size: 20px;
+  margin-top: 2px;
+}

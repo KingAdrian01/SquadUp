@@ -1,20 +1,24 @@
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="SquadUp" />
-  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="theme-color" content="#0b0b0e" />
+  <meta name="color-scheme" content="dark" />
   <title>SquadUp</title>
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="pferderennen.css" />
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap"
+    rel="stylesheet">
   <!-- Import Map für Browser-Module -->
   <script type="importmap">
     {
@@ -35,6 +39,7 @@
     window._firebaseModules = { initializeApp, getDatabase, ref, set, get, push, onValue, update, remove, off, onDisconnect };
   </script>
 </head>
+
 <body>
 
   <!-- ===== SCREEN: HOME ===== -->
@@ -66,56 +71,58 @@
     </div>
   </div>
 
+
   <!-- ── LOBBY SCREEN ── -->
-<div id="screen-lobby" class="screen">
-  <!-- Header: Symmetrisch & Clean -->
-  <div class="lobby-header-nav">
-    <button class="btn-icon" id="btn-leave-lobby" title="Lobby verlassen">
-      <i data-lucide="arrow-left"></i>
-    </button>
-    <span class="lobby-title-sub">LOBBY</span>
-    <button class="btn-icon" id="btn-show-qr" title="QR-Code anzeigen">
-      <i data-lucide="qr-code"></i>
-    </button>
-  </div>
-
-  <div class="lobby-content-scroll">
-    <!-- Unübersehbarer iOS Segmented Switcher für Spielmodus -->
-    <div class="mode-segmented-control" id="mode-segmented-lobby">
-      <button class="segment-btn active" data-mode="busfahrer">🚌 Busfahrer</button>
-      <button class="segment-btn" data-mode="drunterdrueber">🔄 Drunter & Drüber</button>
+  <div id="screen-lobby" class="screen">
+    <!-- Header: Symmetrisch & Clean -->
+    <div class="lobby-header-nav">
+      <button class="btn-icon" id="btn-leave-lobby" title="Lobby verlassen">
+        <i data-lucide="arrow-left"></i>
+      </button>
+      <span class="lobby-title-sub">LOBBY</span>
+      <button class="btn-icon" id="btn-show-qr" title="QR-Code anzeigen">
+        <i data-lucide="qr-code"></i>
+      </button>
     </div>
 
-    <!-- Lobby Code Card -->
-    <div class="lobby-code-card">
-      <div class="lobby-label">LOBBY-CODE</div>
-      <div class="lobby-code-row">
-        <span class="lobby-code-text" id="lobby-code-display">------</span>
+    <div class="lobby-content-scroll">
+      <!-- Unübersehbarer iOS Segmented Switcher für Spielmodus -->
+      <div class="mode-segmented-control" id="mode-segmented-lobby">
+        <button class="segment-btn active" data-mode="busfahrer">🚌 Busfahrer</button>
+        <button class="segment-btn" data-mode="drunterdrueber">🔄 Drunter & Drüber</button>
+        <button class="segment-btn" data-mode="pferderennen">🐎 Pferderennen</button>
+      </div>
+
+      <!-- Lobby Code Card -->
+      <div class="lobby-code-card">
+        <div class="lobby-label">LOBBY-CODE</div>
+        <div class="lobby-code-row">
+          <span class="lobby-code-text" id="lobby-code-display">------</span>
+        </div>
+      </div>
+
+      <!-- Pyramid Selector (nur sichtbar bei Busfahrer) -->
+      <div id="pyramid-selector" class="settings-card">
+        <div class="card-label">PYRAMIDENGRÖSSE</div>
+        <div class="pill-selector">
+          <button class="pill" data-size="6">6 Karten</button>
+          <button class="pill active" data-size="10">10 Karten</button>
+        </div>
+      </div>
+
+      <!-- Spieler-Liste -->
+      <div class="players-container">
+        <div class="card-label">SPIELER (<span id="player-count-display">1</span>)</div>
+        <div id="player-list" class="players-list-grid"></div>
       </div>
     </div>
 
-    <!-- Pyramid Selector (nur sichtbar bei Busfahrer) -->
-    <div id="pyramid-selector" class="settings-card">
-      <div class="card-label">PYRAMIDENGRÖSSE</div>
-      <div class="pill-selector">
-        <button class="pill" data-size="6">6 Karten</button>
-        <button class="pill active" data-size="10">10 Karten</button>
-      </div>
-    </div>
-
-    <!-- Spieler-Liste -->
-    <div class="players-container">
-      <div class="card-label">SPIELER (<span id="player-count-display">1</span>)</div>
-      <div id="player-list" class="players-list-grid"></div>
+    <!-- Bottom Bar: Fixiert & safe vor mobilen Leisten -->
+    <div class="lobby-bottom-bar">
+      <button id="btn-start-game" class="btn btn-primary btn-large w-full">Spiel starten 🚌</button>
+      <div id="waiting-msg" class="waiting-text" style="display:none;">Warte auf den Host...</div>
     </div>
   </div>
-
-  <!-- Bottom Bar: Fixiert & safe vor mobilen Leisten -->
-  <div class="lobby-bottom-bar">
-    <button id="btn-start-game" class="btn btn-primary btn-large w-full">Spiel starten 🚌</button>
-    <div id="waiting-msg" class="waiting-text" style="display:none;">Warte auf den Host...</div>
-  </div>
-</div>
 
   <!-- ===== SCREEN: GAME ===== -->
   <div id="screen-game" class="screen">
@@ -156,14 +163,16 @@
       <div id="qr-container">
         <img id="qr-code-img" src="" alt="Lobby QR Code">
       </div>
-      <button class="btn btn-secondary btn-large" onclick="document.getElementById('qr-modal').classList.remove('active')">Schließen</button>
+      <button class="btn btn-secondary btn-large"
+        onclick="document.getElementById('qr-modal').classList.remove('active')">Schließen</button>
     </div>
   </div>
 
   <!-- ===== DRINKING MODAL ===== -->
   <div id="drinking-modal" class="modal-overlay">
     <div class="modal-box drinking-popup">
-      <div class="drinking-emoji"><i data-lucide="beer" style="width: 64px; height: 64px; color: var(--accent);"></i></div>
+      <div class="drinking-emoji"><i data-lucide="beer" style="width: 64px; height: 64px; color: var(--accent);"></i>
+      </div>
       <h2 id="drinking-count">0</h2>
       <p>Schlucke für dich!</p>
       <p class="modal-hint" id="drinking-status-text">Trink deine Schlucke!</p>
@@ -180,7 +189,8 @@
       <p class="modal-desc">
         Für Multiplayer brauchst du ein kostenloses Firebase-Projekt.<br>
         <a href="https://console.firebase.google.com/" target="_blank">console.firebase.google.com</a>
-        → Neues Projekt → Realtime Database erstellen (Testmodus) → Projekteinstellungen → Web-App hinzufügen → Config kopieren
+        → Neues Projekt → Realtime Database erstellen (Testmodus) → Projekteinstellungen → Web-App hinzufügen → Config
+        kopieren
       </p>
       <textarea id="firebase-config-input" placeholder='{
   "apiKey": "...",
@@ -197,5 +207,7 @@
   </div>
 
   <script type="module" src="app.js"></script>
+  <script type="module" src="pferderennen.js"></script>
 </body>
+
 </html>
