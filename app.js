@@ -13,7 +13,7 @@ import { state } from './state.js';
 import { renderPferderennen, cleanupPferderennen } from './pferderennen.js';
 
 const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000;
-const APP_VERSION = '2.2.3';
+const APP_VERSION = '2.2.4';
 
 
 // ── Firebase Zeug ──────────────────────────────────────────
