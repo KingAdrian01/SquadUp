@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { getServerNow, renderGame, matchHandCard, handleBusChoice, lastGameState, gameListener } from './app.js';
+import { getServerNow, renderGame, matchHandCard, handleBusChoice, lastGameState, gameListener, distributeSips } from './app.js';
 
 // ── Deck Sachen ──────────────────────────────────────
 export const SUITS = ['♥', '♦', '♠', '♣'];
@@ -172,17 +172,62 @@ export function manageDrinkingPopup(gs) {
   if ((gs?.gameType === 'pferderennen' || gs?.phase === 'pferderennen') && !gs?.drinkingActive) return;
   const modal = document.getElementById('drinking-modal');
   if (!modal) return;
+
+  // ── FTD Mode ──────────────────────────────────────────
+  if (gs?.gameType === 'ftd' || gs?.phase === 'ftd') {
+    const dEvent = gs.drinkingEvent;
+    const isMe = dEvent && state.myId === dEvent.drinkerId;
+
+    if (gs.drinkingActive && isMe) {
+      modal.classList.add('active');
+      modal.style.display = 'flex';
+
+      const countEl = document.getElementById('drinking-count');
+      const titleEl = document.getElementById('drinking-title-text');
+      const statusEl = document.getElementById('drinking-status-text');
+      const btn = document.getElementById('btn-confirm-drinking');
+
+      if (countEl) countEl.textContent = dEvent.sips ?? 1;
+      if (titleEl) titleEl.textContent = 'Schlucke für dich';
+      if (statusEl) {
+        statusEl.textContent = '';
+        statusEl.style.display = 'none';
+      }
+      if (btn) {
+        btn.style.display = 'block';
+        btn.textContent = 'Ich habe getrunken';
+      }
+      return;
+    } else {
+      modal.classList.remove('active');
+      modal.style.display = 'none';
+      return;
+    }
+  }
+
+  // ── Busfahrer / Default Mode ─────────────────────────
   const mySips = gs?.players?.[state.myId]?.sipsToDrink || 0;
-  if (gs?.drinkingActive && mySips > 0) {
+  const myDrinker = gs?.activeDrinkers?.[state.myId];
+  const isDone = myDrinker ? myDrinker.done : (gs?.confirmedDrinkers?.[state.myId] || mySips === 0);
+  const sipsToShow = myDrinker ? (myDrinker.sips || mySips) : mySips;
+
+  if (gs?.drinkingActive && !isDone && sipsToShow > 0) {
     modal.classList.add('active');
     modal.style.display = 'flex';
     const countEl = document.getElementById('drinking-count');
-    if (countEl) countEl.textContent = mySips;
-    const hasConfirmed = gs.confirmedDrinkers && gs.confirmedDrinkers[state.myId];
+    if (countEl) countEl.textContent = sipsToShow;
+    const titleEl = document.getElementById('drinking-title-text');
+    if (titleEl) titleEl.textContent = 'Schlucke für dich';
     const btn = document.getElementById('btn-confirm-drinking');
-    if (btn) btn.style.display = hasConfirmed ? 'none' : 'block';
+    if (btn) {
+      btn.style.display = 'block';
+      btn.textContent = 'Ich habe getrunken';
+    }
     const statusEl = document.getElementById('drinking-status-text');
-    if (statusEl) statusEl.textContent = hasConfirmed ? 'Warte auf andere...' : 'Trink deine Schlucke!';
+    if (statusEl) {
+      statusEl.style.display = 'none';
+      statusEl.textContent = '';
+    }
   } else {
     modal.classList.remove('active');
     modal.style.display = 'none';
@@ -238,8 +283,10 @@ export function renderRound2(gs, area) {
   let rowIndex = 0;
   for (const rowSize of rows) {
     const sips = rowIndex + 1;
-    html += `<div class="sip-row-label">${sips} Schluck${sips > 1 ? 'e' : ''}</div>`;
-    html += `<div class="pyramid-row">`;
+    const beers = '🍺'.repeat(sips);
+    html += `<div class="pyramid-row-wrap">
+      <div class="pyramid-beer-indicator" title="${sips} Schluck${sips > 1 ? 'e' : ''}">${beers}</div>
+      <div class="pyramid-row">`;
     for (let i = 0; i < rowSize; i++) {
       const card = pyramid[flatIdx];
       const isCurrent = (flatIdx === pidx - 1 && (timeLeft > 0 || gs.distributionActive || gs.drinkingActive || (gs.matchEndTime && getServerNow() < gs.matchEndTime + 500)));
@@ -255,7 +302,8 @@ export function renderRound2(gs, area) {
       }
       flatIdx++;
     }
-    html += `</div>`;
+    html += `</div>
+    </div>`;
     rowIndex++;
   }
   html += `</div></div>`;
@@ -263,14 +311,11 @@ export function renderRound2(gs, area) {
   // Distribution phase
   if (gs.distributionActive) {
     if (giverId === state.myId) {
-      const pool = gs.players[state.myId].sipPool || 0;
+      const pool = gs.players[state.myId]?.sipPool || 0;
       html += `<div class="choice-section highlight-border">
-        <div class="choice-title">Schlucke verteilen! <i data-lucide="beer" class="icon-sm"></i></div>
-        <div class="choice-question">Reihe ${getSipsForRow(pidx - 1, size)}: Du hast ${pool} Schlucke</div>
+        <div class="choice-title">Schlucke verteilen</div>
+        <div class="choice-question">${pool > 0 ? `Du hast noch ${pool} Schluck${pool === 1 ? '' : 'e'}` : 'Du hast keine Schlucke mehr zum Verteilen.'}</div>
         <div class="distribute-ui">
-          <select id="distribute-amount" class="sip-select">
-            ${Array.from({ length: pool }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
-          </select>
           <div class="distribute-grid">
             ${gs.playerOrder.filter(id => id !== state.myId).map(id => `
               <button class="btn btn-secondary distribute-btn" data-target="${id}">${escHtml(gs.players[id].name)}</button>
@@ -279,7 +324,8 @@ export function renderRound2(gs, area) {
         </div>
       </div>`;
     } else {
-      html += `<div class="info-box"><strong>${escHtml(gs.players[giverId].name)}</strong> verteilt gerade Schlucke...</div>`;
+      const giverName = gs.players?.[giverId]?.name || 'Jemand';
+      html += `<div class="info-box"><strong>${escHtml(giverName)}</strong> verteilt gerade Schlucke...</div>`;
     }
   }
 
@@ -308,7 +354,6 @@ export function renderRound2(gs, area) {
       if (state.isHost) {
         html += `<div class="choice-section">
           <div class="choice-title">Nächste Pyramidenkarte aufdecken</div>
-          <div class="choice-question">Reihe ${getSipsForRow(pidx, size)} (${getSipsForRow(pidx, size)} Schlucke)</div>
           <div class="choice-buttons">
             <button class="btn btn-primary btn-large" id="btn-reveal-pyramid">
               <i data-lucide="eye" style="margin-right:8px"></i>Aufdecken
@@ -316,7 +361,7 @@ export function renderRound2(gs, area) {
           </div>
         </div>`;
       } else {
-        html += `<div class="info-box">Warte auf den Host...<br><div class="loading-dots" style="margin-top:8px"><span></span><span></span><span></span></div></div>`;
+        html += `<div class="info-box waiting-box-inline"><span>Warte auf die nächste Karte</span><span class="loading-dots"><span></span><span></span><span></span></span></div>`;
       }
     } else if (pidx >= size) {
       if (state.isHost && gs.phase === 'round2' && timeLeft <= 0 && !anyoneHasSips) {
@@ -456,7 +501,7 @@ export function renderRound3(gs, area) {
 
   let html = `<div class="bus-section">
     <div class="bus-title">🚌 BUSFAHRER</div>
-    <div class="bus-subtitle">${escHtml(busPlayer.name)} muss 4 Karten in Folge richtig erraten!</div>
+    <div class="bus-subtitle">${guestId ? `<strong>${escHtml(gs.players?.[guestId]?.name || 'Gast')}</strong> springt für ${escHtml(busPlayer?.name || 'den Busfahrer')} ein!` : `${escHtml(busPlayer?.name || 'Busfahrer')} muss 4 Karten in Folge richtig erraten!`}</div>
     <div class="bus-progress">`;
 
   for (let i = 0; i < 4; i++) {
@@ -477,23 +522,38 @@ export function renderRound3(gs, area) {
 
   if (busStep < 4) {
     if (gs.takeOverRequest && isMainBus && !gs.guestDriverId && !gs.pendingGuestDriverId) {
-      const requester = gs.players[gs.takeOverRequest];
+      const reqName = gs.players?.[gs.takeOverRequest]?.name || 'Ein Mitspieler';
+      const isUntouched = (busStep === 0 && busCards.length === 0);
+      const questionText = isUntouched
+        ? `${escHtml(reqName)} möchte sofort das Steuer für dich übernehmen!`
+        : `${escHtml(reqName)} möchte nach deinem nächsten Fehler für dich einspringen!`;
+
       html += `<div class="choice-section highlight-border" style="margin-bottom:15px">
         <div class="choice-title"><i data-lucide="handshake" style="margin-right:8px;"></i>Anfrage erhalten</div>
-        <div class="choice-question" style="font-size:18px">${escHtml(requester.name)} möchte eine Runde für dich fahren!</div>
+        <div class="choice-question" style="font-size:18px">${questionText}</div>
         <div class="choice-buttons">
           <button class="btn btn-primary btn-with-icon" onclick="respondToBusTakeOver(true)">Annehmen <i data-lucide="check"></i></button>
           <button class="btn btn-secondary" onclick="respondToBusTakeOver(false)">Ablehnen</button>
         </div>
       </div>`;
     } else if (gs.takeOverRequest && !isMainBus && !gs.guestDriverId && !gs.pendingGuestDriverId) {
-      html += `<div class="info-box" style="margin-bottom:15px">Anfrage gesendet. Warte auf Bestätigung...</div>`;
+      const isRequester = gs.takeOverRequest === state.myId;
+      if (isRequester) {
+        html += `<div class="info-box" style="margin-bottom:15px"><i data-lucide="timer"></i> Deine Mitfahr-Anfrage wurde gesendet. Warte auf Antwort...</div>`;
+      } else {
+        const reqName = gs.players?.[gs.takeOverRequest]?.name || 'Jemand';
+        html += `<div class="info-box" style="margin-bottom:15px"><i data-lucide="handshake"></i> ${escHtml(reqName)} möchte das Steuer übernehmen...</div>`;
+      }
     } else if (gs.pendingGuestDriverId) {
-      const pPlayer = gs.players[gs.pendingGuestDriverId];
-      html += `<div class="info-box" style="margin-bottom:15px"><i data-lucide="timer"></i> <strong>${escHtml(pPlayer.name)}</strong> übernimmt nach dem nächsten Fehler!</div>`;
+      const pPlayer = gs.players?.[gs.pendingGuestDriverId];
+      const pName = pPlayer?.name || 'Jemand';
+      const isMe = gs.pendingGuestDriverId === state.myId;
+      html += `<div class="info-box" style="margin-bottom:15px"><i data-lucide="timer"></i> <strong>${isMe ? 'Du übernimmst' : escHtml(pName) + ' übernimmt'}</strong> nach dem nächsten Fehler das Steuer!</div>`;
     } else if (guestId) {
-      const gPlayer = gs.players[guestId];
-      html += `<div class="info-box highlight-border" style="margin-bottom:15px"><i data-lucide="star" style="color:var(--accent);"></i> <strong>${escHtml(gPlayer.name)}</strong> fährt diese Runde!</div>`;
+      const gPlayer = gs.players?.[guestId];
+      const gName = gPlayer?.name || 'Gast';
+      const isMe = guestId === state.myId;
+      html += `<div class="info-box highlight-border" style="margin-bottom:15px"><i data-lucide="star" style="color:var(--accent);"></i> <strong>${isMe ? 'Du fährst diese Runde (am Steuer)' : escHtml(gName) + ' fährt diese Runde!'}</strong></div>`;
     } else if (!isMainBus && !gs.takeOverRequest && !gs.guestDriverId && !gs.pendingGuestDriverId && !gs.drinkingActive) {
       html += `<button class="btn btn-secondary btn-large btn-with-icon" style="margin-bottom:15px" onclick="requestBusTakeOver()"><i data-lucide="hand" style="margin-right:8px;"></i>Steuer für eine Runde übernehmen</button>`;
     }
@@ -504,7 +564,7 @@ export function renderRound3(gs, area) {
       </div>`;
 
     if (!isDriving && !gs.drinkingActive) {
-      const activeName = guestId ? gs.players[guestId].name : busPlayer.name;
+      const activeName = guestId ? (gs.players?.[guestId]?.name || 'Gast') : (busPlayer?.name || 'Busfahrer');
       html += `<div class="spectator-msg">
         <strong>${escHtml(activeName)}</strong> ist am Steuer...
         <div style="margin-top:16px"><div class="loading-dots"><span></span><span></span><span></span></div></div>

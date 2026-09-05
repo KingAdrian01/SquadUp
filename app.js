@@ -11,9 +11,10 @@ import {
 } from './busfahrer.js';
 import { state } from './state.js';
 import { renderPferderennen, cleanupPferderennen } from './pferderennen.js';
+import { renderFtd, cleanupFtd } from './ftd.js';
 
 const PLAYER_DISCONNECT_TIMEOUT_MS = 120 * 1000;
-const APP_VERSION = '2.2.4';
+const APP_VERSION = '2.2.5';
 
 
 // ── Firebase Zeug ──────────────────────────────────────────
@@ -103,6 +104,8 @@ function showScreen(id) {
 
   if (target.classList.contains('active')) {
     hideAllModals();
+    target.scrollTop = 0;
+    window.scrollTo(0, 0);
     return;
   }
 
@@ -110,8 +113,15 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   target.classList.add('active');
 
+  // Stets direkt ganz oben am Anfang der Seite landen
+  target.scrollTop = 0;
+  window.scrollTo(0, 0);
+  document.body.scrollTop = 0;
+  document.documentElement.scrollTop = 0;
+
   if (id !== 'game') {
     cleanupPferderennen();
+    cleanupFtd();
   }
 }
 
@@ -318,6 +328,8 @@ function setupHomeUI() {
     });
   });
 
+  initModeCarousel();
+
   initCustomSelect('mode-select-game');
 
   window.onclick = () => {
@@ -342,18 +354,119 @@ function setupHomeUI() {
   document.body.dataset.uiReady = 'true';
 }
 
-function updateModeSwitcherUI(mode) {
-  document.querySelectorAll('#mode-segmented-lobby .segment-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.mode === mode);
+export function updateModeCarouselMask() {
+  const container = document.getElementById('mode-segmented-lobby');
+  const dots = document.querySelectorAll('#mode-pagination-dots .mode-dot');
+  if (!container) return;
+
+  // Wenn der Container noch nicht gerendert ist (z. B. screen noch versteckt):
+  // Behalte Standard-Maske (nur rechts Fade, links 100% deckend) bei
+  if (container.clientWidth === 0) {
+    container.classList.remove('mask-none', 'mask-left', 'mask-both');
+    container.classList.add('mask-right');
+    const mask = 'linear-gradient(to right, black calc(100% - 32px), transparent 100%)';
+    container.style.maskImage = mask;
+    container.style.webkitMaskImage = mask;
+    return;
+  }
+
+  const maxScroll = container.scrollWidth - container.clientWidth;
+  if (maxScroll <= 5) {
+    if (dots.length) dots.forEach((d, i) => d.classList.toggle('active', i === 0));
+    container.classList.remove('mask-right', 'mask-left', 'mask-both');
+    container.classList.add('mask-none');
+    container.style.maskImage = 'none';
+    container.style.webkitMaskImage = 'none';
+    return;
+  }
+
+  const sl = container.scrollLeft;
+  // Bei 2 Dots: Dot 0 (Seite 1: Busfahrer / Drunter/Drüber), Dot 1 (Seite 2: Pferderennen / FTD)
+  if (dots.length) {
+    const activeIndex = (sl < maxScroll / 2) ? 0 : 1;
+    dots.forEach((dot, idx) => {
+      dot.classList.toggle('active', idx === activeIndex);
+    });
+  }
+
+  // Dynamische Kanten-Maske (mask-image) je nach Scroll-Position
+  container.classList.remove('mask-none', 'mask-right', 'mask-left', 'mask-both');
+  if (sl <= 5) {
+    // Seite 1 (ganz links / scrollLeft <= 5): Links absolut KEIN Fade (100% sichtbar), Fade nur rechts
+    container.classList.add('mask-right');
+    const mask = 'linear-gradient(to right, black calc(100% - 32px), transparent 100%)';
+    container.style.maskImage = mask;
+    container.style.webkitMaskImage = mask;
+  } else if (sl >= maxScroll - 5) {
+    // Seite 2 (ganz rechts / am Ende angekommen): Rechts kein Fade, Fade nur links
+    container.classList.add('mask-left');
+    const mask = 'linear-gradient(to right, transparent 0%, black 32px)';
+    container.style.maskImage = mask;
+    container.style.webkitMaskImage = mask;
+  } else {
+    // Dazwischen (während des Scrollens): Beidseitiger Fade
+    container.classList.add('mask-both');
+    const mask = 'linear-gradient(to right, transparent 0%, black 32px, black calc(100% - 32px), transparent 100%)';
+    container.style.maskImage = mask;
+    container.style.webkitMaskImage = mask;
+  }
+}
+
+function initModeCarousel() {
+  const container = document.getElementById('mode-segmented-lobby');
+  const dots = document.querySelectorAll('#mode-pagination-dots .mode-dot');
+  if (!container) return;
+
+  container.addEventListener('scroll', updateModeCarouselMask, { passive: true });
+  window.addEventListener('resize', updateModeCarouselMask);
+
+  dots.forEach((dot, idx) => {
+    dot.addEventListener('click', () => {
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      if (maxScroll <= 0) return;
+      const targetScroll = idx === 0 ? 0 : maxScroll;
+      container.scrollTo({ left: targetScroll, behavior: 'smooth' });
+    });
   });
+
+  // Masken-Update direkt nach der Initialisierung aufrufen
+  updateModeCarouselMask();
+  setTimeout(updateModeCarouselMask, 50);
+}
+
+function updateModeSwitcherUI(mode) {
+  const container = document.getElementById('mode-segmented-lobby');
+  const buttons = document.querySelectorAll('#mode-segmented-lobby .segment-btn');
+  buttons.forEach((btn, idx) => {
+    const isActive = btn.dataset.mode === mode;
+    btn.classList.toggle('active', isActive);
+    if (isActive && container && container.clientWidth > 0) {
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      if (maxScroll > 0) {
+        if (idx === 0) {
+          container.scrollTo({ left: 0, behavior: 'smooth' });
+        } else if (idx === buttons.length - 1) {
+          container.scrollTo({ left: maxScroll, behavior: 'smooth' });
+        } else {
+          const btnLeft = btn.offsetLeft;
+          const btnWidth = btn.offsetWidth;
+          const containerWidth = container.clientWidth;
+          const targetLeft = btnLeft - (containerWidth / 2) + (btnWidth / 2);
+          container.scrollTo({ left: Math.max(0, Math.min(maxScroll, targetLeft)), behavior: 'smooth' });
+        }
+      }
+    }
+  });
+  updateModeCarouselMask();
 }
 
 function updateCustomSelectUI(mode) {
   const containers = ['mode-select-lobby', 'mode-select-game'];
+  const labelMap = { busfahrer: 'Busfahrer', drunterdrueber: 'Drunter/Drüber', pferderennen: '🐎 Pferderennen', ftd: 'FckTheD' };
   containers.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    const label = mode === 'busfahrer' ? 'Busfahrer' : 'Drunter & Drüber';
+    const label = labelMap[mode] || mode;
     el.querySelector('.current-value').textContent = label;
     el.querySelectorAll('.option').forEach(opt => opt.classList.toggle('selected', opt.dataset.value === mode));
   });
@@ -440,6 +553,18 @@ function showQRCode() {
   document.getElementById('qr-modal').classList.add('active');
 }
 
+function updateStartGameButtonUI(btn, mode) {
+  if (!btn) return;
+  if (mode === 'drunterdrueber') {
+    btn.innerHTML = `Spiel starten <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-down-up" style="vertical-align: middle; margin-right: 6px;"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>`;
+  } else if (mode === 'ftd') {
+    btn.innerHTML = `Spiel starten <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-playing-cards-fan" style="vertical-align: middle; margin-right: 6px;"><path d="M12.65 7.65a2 2 0 012.629-1.046l5.51 2.374a2 2 0 011.046 2.628l-3.957 9.184a2 2 0 01-2.628 1.046l-5.51-2.374a2 2 0 01-1.046-2.628z"/><path d="M18 7.777V4a2 2 0 00-2-2h-6a2 2 0 00-2 2v10a2 2 0 001.137 1.805"/><path d="m8 4.389-4.364.809a2 2 0 00-1.602 2.33l1.822 9.833a2 2 0 002.331 1.602l2.542-.47"/></svg>`;
+  } else {
+    const _e = { busfahrer: '🚌', pferderennen: '🐎' };
+    btn.textContent = `Spiel starten ${_e[mode] || '🎮'}`;
+  }
+}
+
 // ── LOBBY SCREEN ──────────────────────────────────────────
 function enterLobbyScreen() {
   showScreen('lobby');
@@ -450,6 +575,11 @@ function enterLobbyScreen() {
   const modeSegmented = document.getElementById('mode-segmented-lobby');
   if (modeSegmented) modeSegmented.classList.toggle('disabled', !isHost);
   updateModeSwitcherUI(selectedGameMode);
+  updateModeCarouselMask();
+  setTimeout(() => {
+    updateModeSwitcherUI(selectedGameMode);
+    updateModeCarouselMask();
+  }, 60);
 
   document.getElementById('lobby-code-display').onclick = () => {
     navigator.clipboard?.writeText(lobbyId).then(() => toast('Code kopiert! ' + lobbyId));
@@ -472,7 +602,7 @@ function enterLobbyScreen() {
       // UI Update für Start-Button
       const startBtn = document.getElementById('btn-start-game');
       if (isHost && startBtn) {
-        startBtn.textContent = selectedGameMode === 'busfahrer' ? 'Spiel starten 🚌' : 'Spiel starten 🃏';
+        updateStartGameButtonUI(startBtn, selectedGameMode);
       }
     }
   });
@@ -505,7 +635,7 @@ function enterLobbyScreen() {
   if (isHost) {
     newStartBtn.style.display = ''; // Zeige Button
     waitingMsg.style.display = 'none';
-    newStartBtn.textContent = selectedGameMode === 'busfahrer' ? 'Spiel starten 🚌' : 'Spiel starten 🃏';
+    updateStartGameButtonUI(newStartBtn, selectedGameMode);
     newStartBtn.addEventListener('click', startGame);
   } else {
     newStartBtn.style.display = 'none'; // Zwingend verstecken
@@ -677,6 +807,13 @@ async function startGame() {
     return;
   }
 
+  if (selectedGameMode === 'ftd') {
+    const ftdDeck = makeDeck();
+    const ftdState = initFtdGame(players, ftdDeck);
+    await set(ref(db, `lobbies/${lobbyId}/game`), ftdState);
+    return;
+  }
+
   const lobbyUpdate = {};
   lobbyUpdate[`lobbies/${lobbyId}/status`] = 'playing';
   await update(ref(db), lobbyUpdate);
@@ -730,6 +867,14 @@ export let lastGameState = null;
 
 function enterGameScreen() {
   showScreen('game');
+
+  const screen = document.getElementById('screen-game');
+  if (screen) screen.scrollTop = 0;
+  window.scrollTo(0, 0);
+  requestAnimationFrame(() => {
+    if (screen) screen.scrollTop = 0;
+    window.scrollTo(0, 0);
+  });
 
   const modeContainer = document.getElementById('mode-select-game');
   if (modeContainer) modeContainer.classList.add('disabled');
@@ -930,12 +1075,26 @@ export function renderGame(gs) {
   document.getElementById('screen-game')?.classList.toggle('hide-game-header', gs.phase === 'round3');
 
   if (gs.gameType === 'drunterdrueber' || gs.phase === 'playing') {
-    phaseBadge.textContent = 'Drunter & Drüber';
+    phaseBadge.textContent = 'Drunter/Drüber';
     try {
       renderDrunterDrueber(gs, area);
     } catch (error) {
       console.error("Error rendering Drunter & Drüber:", error);
       area.innerHTML = `<div class="info-box highlight-border">Ein Fehler ist aufgetreten: ${error.message}. Bitte Konsole prüfen.</div>`;
+    }
+    return;
+  }
+
+  if (gs.gameType === 'ftd' || gs.phase === 'ftd') {
+    phaseBadge.textContent = '🍺 Fuck the Dealer';
+    if (cpBadge) cpBadge.innerHTML = '';
+    if (progress) { progress.textContent = ''; progress.style.display = ''; }
+    if (area) area.style.marginTop = '';
+    try {
+      renderFtd(gs, area);
+    } catch (error) {
+      console.error('Error rendering FTD:', error);
+      area.innerHTML = `<div class="info-box highlight-border">FTD Fehler: ${error.message}</div>`;
     }
     return;
   }
@@ -1083,12 +1242,15 @@ async function handleRound1Choice(choice, gs) {
     } else if (needsToDrink) {
       updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
       updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = getServerNow();
-      const confirmed = {};
+      const activeDrinkers = {};
       allPlayers.forEach(pid => {
         const sips = statePlayers[pid]?.sipsToDrink || 0;
-        if (sips === 0) confirmed[pid] = true;
+        if (sips > 0) {
+          activeDrinkers[pid] = { sips, done: false };
+        }
       });
-      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
+      updates[`lobbies/${lobbyId}/game/activeDrinkers`] = activeDrinkers;
+      updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null;
     } else {
       const nextCard = latestGs.currentRoundCard + 1;
       if (nextCard >= 4) updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
@@ -1145,11 +1307,15 @@ async function finishDistributionPhase(gs, updates = {}) {
   if (anyoneNeedsToDrink) {
     updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
     updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = getServerNow();
-    const confirmed = {};
+    const activeDrinkers = {};
     (gs.playerOrder || []).forEach(pid => {
-      if ((players[pid]?.sipsToDrink || 0) === 0) confirmed[pid] = true;
+      const sips = players[pid]?.sipsToDrink || 0;
+      if (sips > 0) {
+        activeDrinkers[pid] = { sips, done: false };
+      }
     });
-    updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
+    updates[`lobbies/${lobbyId}/game/activeDrinkers`] = activeDrinkers;
+    updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null;
   } else if (gs.gameType !== 'drunterdrueber' && gs.phase === 'round1') {
     const nextRoundCard = gs.currentRoundCard + 1;
     if (nextRoundCard >= 4) updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
@@ -1165,7 +1331,7 @@ async function finishDistributionPhase(gs, updates = {}) {
   await update(ref(db), updates);
 }
 
-async function distributeSips(targetId, amount, gs) {
+export async function distributeSips(targetId, amount, gs) {
   if (isProcessing || !gs) return;
   isProcessing = true;
   try {
@@ -1193,7 +1359,8 @@ async function distributeSips(targetId, amount, gs) {
     };
 
     await finishDistributionPhase(updatedGs, updates);
-    toast(`${amount} Schlucke an ${latestGs.players[targetId].name} verteilt!`);
+    const targetName = latestGs.players[targetId]?.name || 'Spieler';
+    toast(amount === 1 ? `1 Schluck an ${targetName} verteilt!` : `${amount} Schlucke an ${targetName} verteilt!`);
   } catch (e) {
     console.error(e);
   } finally {
@@ -1232,70 +1399,146 @@ async function skipDistribution() {
 async function confirmSips() {
   if (isProcessing || !lastGameState || !lobbyId) return;
 
-  if (!lastGameState.drinkingActive) {
+  // ── FTD Mode ──────────────────────────────────────────
+  if (lastGameState.gameType === 'ftd' || lastGameState.phase === 'ftd') {
+    if (!lastGameState.drinkingActive || !lastGameState.drinkingEvent) return;
+    const dEvent = lastGameState.drinkingEvent;
+
+    // Nur der Spieler, der trinken muss, darf bestätigen
+    if (myId !== dEvent.drinkerId) return;
+
     isProcessing = true;
     try {
       const updates = {};
-      updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
-      updates[`lobbies/${lobbyId}/game/players/${myId}/confirmedDrinker`] = true;
+      updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
+      updates[`lobbies/${lobbyId}/game/drinkingEvent`] = null;
+
+      // Nächste Runde starten
+      updates[`lobbies/${lobbyId}/game/dealerIndex`] = dEvent.nextDealerIndex;
+      updates[`lobbies/${lobbyId}/game/raterIndex`] = dEvent.nextRaterIndex;
+      updates[`lobbies/${lobbyId}/game/failStreak`] = dEvent.nextFailStreak;
+      updates[`lobbies/${lobbyId}/game/currentCard`] = null;
+      updates[`lobbies/${lobbyId}/game/cardDrawn`] = false;
+      updates[`lobbies/${lobbyId}/game/attempt`] = 1;
+      updates[`lobbies/${lobbyId}/game/hint`] = null;
+      updates[`lobbies/${lobbyId}/game/lastRaterGuess`] = null;
+      updates[`lobbies/${lobbyId}/game/lastRaterName`] = null;
+      updates[`lobbies/${lobbyId}/game/roundResult`] = null;
+
       await update(ref(db), updates);
+
       const m = document.getElementById('drinking-modal');
       if (m) {
         m.style.display = 'none';
         m.classList.remove('active');
       }
+    } catch (e) {
+      console.error('FTD confirmSips error:', e);
+      toast('Fehler beim Bestätigen ❌');
     } finally {
       isProcessing = false;
     }
     return;
   }
 
-  const confirmedObj = lastGameState.confirmedDrinkers || {};
-  if (confirmedObj[myId]) return;
-
   isProcessing = true;
   try {
+    // Frischen State direkt aus Firebase abfragen, um Race Conditions zu vermeiden
+    const gameSnap = await get(ref(db, `lobbies/${lobbyId}/game`));
+    const gs = gameSnap.val();
+    if (!gs) return;
+
+    // Falls gar kein Trinken aktiv ist, Modal sofort lokal schließen
+    if (!gs.drinkingActive) {
+      const m = document.getElementById('drinking-modal');
+      if (m) {
+        m.style.display = 'none';
+        m.classList.remove('active');
+      }
+      return;
+    }
+
+    const activeDrinkers = gs.activeDrinkers || {};
+    const myDrinker = activeDrinkers[myId];
+
+    // Hat dieser Spieler bereits bestätigt?
+    if (myDrinker?.done) {
+      const m = document.getElementById('drinking-modal');
+      if (m) {
+        m.style.display = 'none';
+        m.classList.remove('active');
+      }
+      return;
+    }
+
+    // Spielerliste laden, um getrennte / inaktive Spieler zu berücksichtigen
+    const pSnap = await get(ref(db, `lobbies/${lobbyId}/players`));
+    const pData = pSnap.val() || {};
+
+    // Finde alle anderen Spieler, die noch trinken müssen und online sind
+    let otherPendingDrinkers = [];
+    if (Object.keys(activeDrinkers).length > 0) {
+      otherPendingDrinkers = Object.keys(activeDrinkers).filter(pid =>
+        pid !== myId &&
+        !activeDrinkers[pid]?.done &&
+        pData[pid] &&
+        !pData[pid].disconnected
+      );
+    } else {
+      // Fallback für Phasen ohne activeDrinkers Map
+      otherPendingDrinkers = (gs.playerOrder || []).filter(pid =>
+        pid !== myId &&
+        (gs.players?.[pid]?.sipsToDrink || 0) > 0 &&
+        !(gs.confirmedDrinkers && gs.confirmedDrinkers[pid]) &&
+        pData[pid] &&
+        !pData[pid].disconnected
+      );
+    }
+
+    const isLastOne = (otherPendingDrinkers.length === 0);
     const updates = {};
+
+    // 1. Eigenen Spieler-Status zwingend auf 0 & confirmedDrinker setzen
     updates[`lobbies/${lobbyId}/game/players/${myId}/sipsToDrink`] = 0;
     updates[`lobbies/${lobbyId}/game/players/${myId}/confirmedDrinker`] = true;
 
-    const othersStillDrinkingIds = lastGameState.playerOrder.filter(pid =>
-      pid !== myId && (lastGameState.players[pid]?.sipsToDrink || 0) > 0
-    );
-
-    let isLastOne = true;
-    if (othersStillDrinkingIds.length > 0) {
-      const pSnap = await get(ref(db, `lobbies/${lobbyId}/players`));
-      const pData = pSnap.val() || {};
-      const activeDrinkers = othersStillDrinkingIds.filter(pid => pData[pid] && !pData[pid].disconnected);
-      isLastOne = (activeDrinkers.length === 0);
+    // Eigenes Modal sofort schließen
+    const m = document.getElementById('drinking-modal');
+    if (m) {
+      m.style.display = 'none';
+      m.classList.remove('active');
     }
 
+    // 2. Unterscheidung: Letzter Trinker vs. noch ausstehende Trinker
     if (isLastOne) {
+      // Wenn der Letzte fertig ist: Gesamte Trink-Objekte auf null setzen (KEINE Child-Pfade schreiben, sonst Firebase Ancestor-Fehler!)
       updates[`lobbies/${lobbyId}/game/drinkingActive`] = false;
+      updates[`lobbies/${lobbyId}/game/activeDrinkers`] = null;
       updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null;
 
-      if (lastGameState.phase === 'round1') {
-        const nextRoundCard = lastGameState.currentRoundCard + 1;
+      if (gs.phase === 'round1') {
+        const nextRoundCard = (gs.currentRoundCard ?? 0) + 1;
         if (nextRoundCard >= 4) {
           updates[`lobbies/${lobbyId}/game/phase`] = 'round2';
         } else {
           updates[`lobbies/${lobbyId}/game/currentRoundCard`] = nextRoundCard;
         }
         updates[`lobbies/${lobbyId}/game/currentPlayerIndex`] = 0;
-      } else if (lastGameState.phase === 'round2' && lastGameState.pyramidIndex >= lastGameState.pyramidSize) {
-        await finishRound2(lastGameState, updates);
+      } else if (gs.phase === 'round2' && (gs.pyramidIndex ?? 0) >= (gs.pyramid?.length || gs.pyramidSize || 10)) {
+        await finishRound2(gs, updates);
         return;
-      } else if (lastGameState.phase === 'round3') {
+      } else if (gs.phase === 'round3') {
         updates[`lobbies/${lobbyId}/game/busCards`] = [];
         updates[`lobbies/${lobbyId}/game/busStep`] = 0;
       }
-
-      await update(ref(db), updates);
     } else {
+      // Es trinken noch andere: Nur die eigenen Child-Einträge im activeDrinkers-Objekt aktualisieren
+      updates[`lobbies/${lobbyId}/game/activeDrinkers/${myId}/done`] = true;
+      updates[`lobbies/${lobbyId}/game/activeDrinkers/${myId}/sips`] = 0;
       updates[`lobbies/${lobbyId}/game/confirmedDrinkers/${myId}`] = true;
-      await update(ref(db), updates);
     }
+
+    await update(ref(db), updates);
   } catch (e) {
     console.error("ConfirmSips Error:", e);
     toast("Fehler bei der Bestätigung ❌");
@@ -1455,14 +1698,17 @@ async function autoLockMissedCards(gs) {
       if (anyoneNeedsToDrink) {
         updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
         updates[`lobbies/${lobbyId}/game/drinkingStartTime`] = getServerNow();
-        const confirmed = {};
+        const activeDrinkers = {};
         gs.playerOrder.forEach(pid => {
           const sips = (updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`] !== undefined)
             ? updates[`lobbies/${lobbyId}/game/players/${pid}/sipsToDrink`]
             : (gs.players[pid].sipsToDrink || 0);
-          if (sips === 0) confirmed[pid] = true;
+          if (sips > 0) {
+            activeDrinkers[pid] = { sips, done: false };
+          }
         });
-        updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = confirmed;
+        updates[`lobbies/${lobbyId}/game/activeDrinkers`] = activeDrinkers;
+        updates[`lobbies/${lobbyId}/game/confirmedDrinkers`] = null;
       } else if (gs.phase === 'tiebreaker' || gs.pyramidIndex >= gs.pyramid.length) {
         await finishRound2(gs, updates);
         return;
@@ -1582,21 +1828,38 @@ async function requestBusTakeOver() {
 }
 
 async function respondToBusTakeOver(accepted) {
-  if (!fbReady || isProcessing) return;
+  if (!fbReady || isProcessing || !lobbyId) return;
   isProcessing = true;
   try {
-    const requesterId = lastGameState?.takeOverRequest;
+    const gameSnap = await get(ref(db, `lobbies/${lobbyId}/game`));
+    const gs = gameSnap.val() || lastGameState;
+    const requesterId = gs?.takeOverRequest;
+
     const updates = {
       [`lobbies/${lobbyId}/game/takeOverRequest`]: null
     };
+
     if (accepted && requesterId) {
-      // In die Warteschlange setzen
-      updates[`lobbies/${lobbyId}/game/pendingGuestDriverId`] = requesterId;
-      const nextName = lastGameState.players[requesterId]?.name || 'Jemand';
-      toast(`🤝 ${nextName} übernimmt nach dem nächsten Fehler!`);
+      const nextName = gs.players?.[requesterId]?.name || 'Jemand';
+      const step = gs.busStep ?? 0;
+      const cardsCount = (gs.busCards || []).length;
+      const isUntouched = (step === 0 && cardsCount === 0);
+
+      if (isUntouched) {
+        // Fall 1: Runde noch unberührt (Fortschritt = 0) -> Sofortige Übergabe
+        updates[`lobbies/${lobbyId}/game/guestDriverId`] = requesterId;
+        updates[`lobbies/${lobbyId}/game/pendingGuestDriverId`] = null;
+        toast(`🤝 ${nextName} übernimmt sofort das Steuer!`);
+      } else {
+        // Fall 2: Runde läuft bereits (Fortschritt > 0) -> Übergabe erst nach Fehler
+        updates[`lobbies/${lobbyId}/game/pendingGuestDriverId`] = requesterId;
+        toast(`🤝 ${nextName} übernimmt nach dem nächsten Fehler!`);
+      }
+    } else if (!accepted) {
+      toast("Anfrage abgelehnt ✋");
     }
+
     await update(ref(db), updates);
-    if (!accepted) toast("Anfrage abgelehnt ✋");
   } catch (e) {
     console.error("Fehler bei Übernahme-Antwort:", e);
   } finally {
@@ -1688,6 +1951,9 @@ export async function handleBusChoice(choice, gs) {
         [`lobbies/${lobbyId}/game/drinkingActive`]: true,
         [`lobbies/${lobbyId}/game/drinkingStartTime`]: getServerNow(),
         [`lobbies/${lobbyId}/game/confirmedDrinkers`]: confirmed,
+        [`lobbies/${lobbyId}/game/activeDrinkers`]: {
+          [myId]: { sips: sipsToDrink, done: false }
+        },
         [`lobbies/${lobbyId}/game/takeOverRequest`]: null,
         [`lobbies/${lobbyId}/game/guestDriverId`]: null
       };
@@ -1965,4 +2231,254 @@ window.setHorseBetStartTime = async function () {
   const updates = {};
   updates[`lobbies/${lobbyId}/game/betStartTime`] = getServerNow();
   await update(ref(db), updates);
+};
+
+// ── FTD HELPER ─────────────────────────────────────────────
+function initFtdGame(players, ftdDeck) {
+  const playerStates = {};
+  for (const p of players) {
+    playerStates[p.id] = { id: p.id, name: p.name };
+  }
+  const graveyard = {};
+  VALUES.forEach(v => { graveyard[v] = []; });
+  return {
+    gameType: 'ftd',
+    phase: 'ftd',
+    hostId: myId,
+    playerOrder: players.map(p => p.id),
+    players: playerStates,
+    deck: ftdDeck,
+    graveyard,
+    dealerIndex: 0,
+    raterIndex: 1,
+    failStreak: 0,
+    currentCard: null,
+    cardDrawn: false,
+    attempt: 1,
+    hint: null,
+    lastRaterGuess: null,
+    lastRaterName: null,
+    drinkingActive: false,
+    drinkingEvent: null,
+    roundResult: null,
+    roundActive: false,
+  };
+}
+
+// ── FTD ACTIONS ────────────────────────────────────────────
+
+/** Dealer draws a card (only dealer may call, host-side lock via isProcessing) */
+window.ftdDrawCard = async () => {
+  if (!fbReady || isProcessing || !lobbyId || !lastGameState) return;
+  const gs = lastGameState;
+  if (gs.gameType !== 'ftd' || gs.cardDrawn || gs.drinkingActive || gs.roundResult) return;
+  const dealerId = (gs.playerOrder || [])[gs.dealerIndex ?? 0];
+  if (myId !== dealerId) return;
+
+  isProcessing = true;
+  try {
+    // Re-fetch to avoid race condition
+    const snap = await get(ref(db, `lobbies/${lobbyId}/game`));
+    const lg = snap.val();
+    if (!lg || lg.cardDrawn || lg.drinkingActive) return;
+
+    let deck = [...(lg.deck || [])];
+    if (deck.length === 0) deck = makeDeck();
+    const card = deck.shift();
+
+    await update(ref(db), {
+      [`lobbies/${lobbyId}/game/deck`]: deck,
+      [`lobbies/${lobbyId}/game/currentCard`]: card,
+      [`lobbies/${lobbyId}/game/cardDrawn`]: true,
+      [`lobbies/${lobbyId}/game/attempt`]: 1,
+      [`lobbies/${lobbyId}/game/hint`]: null,
+      [`lobbies/${lobbyId}/game/lastRaterGuess`]: null,
+      [`lobbies/${lobbyId}/game/lastRaterName`]: null,
+      [`lobbies/${lobbyId}/game/drinkingActive`]: false,
+      [`lobbies/${lobbyId}/game/drinkingEvent`]: null,
+      [`lobbies/${lobbyId}/game/roundResult`]: null,
+    });
+  } catch (e) {
+    console.error('ftdDrawCard error:', e);
+    toast('Fehler beim Ziehen ❌');
+  } finally {
+    isProcessing = false;
+  }
+};
+
+/** Dealer gives higher/lower hint after attempt-1 miss */
+window.ftdGiveHint = async (hintDir) => {
+  if (!fbReady || isProcessing || !lobbyId || !lastGameState) return;
+  const gs = lastGameState;
+  if (gs.gameType !== 'ftd' || !gs.cardDrawn || gs.drinkingActive || gs.roundResult || gs.attempt !== 2 || gs.hint) return;
+  const dealerId = (gs.playerOrder || [])[gs.dealerIndex ?? 0];
+  if (myId !== dealerId) return;
+
+  isProcessing = true;
+  try {
+    // Validate hint direction against actual card value to prevent drunk misclicks
+    let finalHint = hintDir;
+    if (gs.currentCard && gs.lastRaterGuess && VALUE_ORDER[gs.currentCard.value] && VALUE_ORDER[gs.lastRaterGuess]) {
+      const targetVal = VALUE_ORDER[gs.currentCard.value];
+      const guessVal = VALUE_ORDER[gs.lastRaterGuess];
+      finalHint = targetVal > guessVal ? 'higher' : 'lower';
+    }
+
+    await update(ref(db, `lobbies/${lobbyId}/game`), { hint: finalHint });
+  } catch (e) {
+    console.error('ftdGiveHint error:', e);
+  } finally {
+    isProcessing = false;
+  }
+};
+
+/** Rater submits a rank guess (attempt 1 or 2) */
+window.ftdGuess = async (rank) => {
+  if (!fbReady || isProcessing || !lobbyId || !lastGameState) return;
+  const gs = lastGameState;
+  if (gs.gameType !== 'ftd' || !gs.cardDrawn || gs.drinkingActive) return;
+  const raterId = (gs.playerOrder || [])[gs.raterIndex ?? 1];
+  if (myId !== raterId) return;
+
+  isProcessing = true;
+  try {
+    // Re-fetch for consistency
+    const snap = await get(ref(db, `lobbies/${lobbyId}/game`));
+    const lg = snap.val();
+    if (!lg || lg.drinkingActive) return;
+
+    const card = lg.currentCard;
+    const attempt = lg.attempt || 1;
+    const correct = card.value === rank;
+    const updates = {};
+    const order = lg.playerOrder || [];
+    const len = order.length;
+    const dealerIdx = lg.dealerIndex ?? 0;
+    const raterIdx = lg.raterIndex ?? 1;
+    const dealerId = order[dealerIdx];
+    const dealerName = lg.players?.[dealerId]?.name ?? '?';
+    const raterName = lg.players?.[raterId]?.name ?? '?';
+    const failStreak = lg.failStreak || 0;
+
+    // Clone graveyard (we update it only when round concludes)
+    const graveyard = JSON.parse(JSON.stringify(lg.graveyard || {}));
+    VALUES.forEach(v => { if (!graveyard[v]) graveyard[v] = []; });
+
+    if (correct) {
+      // ✅ Hit 1: 4 Schlucke für Dealer | Hit 2: 2 Schlucke für Dealer
+      if (!graveyard[card.value].includes(card.suit)) {
+        graveyard[card.value].push(card.suit);
+      }
+      updates[`lobbies/${lobbyId}/game/graveyard`] = graveyard;
+
+      const sips = attempt === 1 ? 4 : 2;
+
+      // Dealer bleibt Dealer, nächster Spieler wird Rater (überspringt Dealer)
+      let next = (raterIdx + 1) % len;
+      if (next === dealerIdx) next = (next + 1) % len;
+      const nextRaterIndex = next;
+
+      updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
+      updates[`lobbies/${lobbyId}/game/drinkingEvent`] = {
+        drinkerId: dealerId,
+        drinkerName: dealerName,
+        sips,
+        nextDealerIndex: dealerIdx,
+        nextRaterIndex,
+        nextFailStreak: failStreak,
+      };
+      updates[`lobbies/${lobbyId}/game/roundResult`] = null;
+
+      const curTotal = lg.players?.[dealerId]?.sipsTotal || 0;
+      updates[`lobbies/${lobbyId}/game/players/${dealerId}/sipsTotal`] = curTotal + sips;
+
+    } else if (attempt === 1) {
+      // ❌ Attempt-1 miss — advance to attempt 2, await dealer hint (kein Trinken)
+      updates[`lobbies/${lobbyId}/game/attempt`] = 2;
+      updates[`lobbies/${lobbyId}/game/hint`] = null;
+      updates[`lobbies/${lobbyId}/game/lastRaterGuess`] = rank;
+      updates[`lobbies/${lobbyId}/game/lastRaterName`] = raterName;
+    } else {
+      // ❌ Attempt-2 miss — Differenz als Schlucke für den Rater (|Zielkarte - Tipp 2|)
+      const targetVal = VALUE_ORDER[card.value] ?? 0;
+      const guessVal = VALUE_ORDER[rank] ?? 0;
+      const sips = Math.abs(targetVal - guessVal);
+      const newFail = failStreak + 1;
+
+      if (!graveyard[card.value].includes(card.suit)) {
+        graveyard[card.value].push(card.suit);
+      }
+      updates[`lobbies/${lobbyId}/game/graveyard`] = graveyard;
+
+      let nextDealerIndex = dealerIdx;
+      let nextRaterIndex;
+      let nextFailStreak = newFail;
+
+      if (newFail >= 3) {
+        // 🔄 3 Fails: Dealerwechsel
+        nextDealerIndex = (dealerIdx + 1) % len;
+        nextRaterIndex = (nextDealerIndex + 1) % len;
+        nextFailStreak = 0;
+      } else {
+        // Dealer bleibt, Rater rückt vor (überspringt Dealer)
+        let next = (raterIdx + 1) % len;
+        if (next === dealerIdx) next = (next + 1) % len;
+        nextRaterIndex = next;
+      }
+
+      updates[`lobbies/${lobbyId}/game/drinkingActive`] = true;
+      updates[`lobbies/${lobbyId}/game/drinkingEvent`] = {
+        drinkerId: raterId,
+        drinkerName: raterName,
+        sips,
+        nextDealerIndex,
+        nextRaterIndex,
+        nextFailStreak,
+      };
+      updates[`lobbies/${lobbyId}/game/roundResult`] = null;
+
+      const curTotal = lg.players?.[raterId]?.sipsTotal || 0;
+      updates[`lobbies/${lobbyId}/game/players/${raterId}/sipsTotal`] = curTotal + sips;
+    }
+
+    await update(ref(db), updates);
+  } catch (e) {
+    console.error('ftdGuess error:', e);
+    toast('Fehler beim Tippen ❌');
+  } finally {
+    isProcessing = false;
+  }
+};
+
+/** Current dealer advances to the next round (fallback) */
+window.ftdNextRound = async () => {
+  if (!fbReady || isProcessing || !lobbyId || !lastGameState) return;
+  const gs = lastGameState;
+  if (gs.gameType !== 'ftd') return;
+  const dealerId = (gs.playerOrder || [])[gs.dealerIndex ?? 0];
+  if (myId !== dealerId) return;
+
+  isProcessing = true;
+  try {
+    const len = (gs.playerOrder || []).length;
+    let next = ((gs.raterIndex ?? 1) + 1) % len;
+    if (next === (gs.dealerIndex ?? 0)) next = (next + 1) % len;
+
+    await update(ref(db), {
+      [`lobbies/${lobbyId}/game/raterIndex`]: next,
+      [`lobbies/${lobbyId}/game/currentCard`]: null,
+      [`lobbies/${lobbyId}/game/cardDrawn`]: false,
+      [`lobbies/${lobbyId}/game/attempt`]: 1,
+      [`lobbies/${lobbyId}/game/hint`]: null,
+      [`lobbies/${lobbyId}/game/lastRaterGuess`]: null,
+      [`lobbies/${lobbyId}/game/lastRaterName`]: null,
+      [`lobbies/${lobbyId}/game/drinkingActive`]: false,
+      [`lobbies/${lobbyId}/game/drinkingEvent`]: null,
+      [`lobbies/${lobbyId}/game/roundResult`]: null,
+    });
+  } catch (e) {
+    console.error('ftdNextRound error:', e);
+  } finally {
+    isProcessing = false;
+  }
 };

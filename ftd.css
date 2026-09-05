@@ -1,0 +1,766 @@
+/* ===================================================
+   FUCK THE DEALER (FTD) – iOS Glassmorphism Style
+   Extends style.css / pferderennen.css pattern
+=================================================== */
+
+/* ── Container ────────────────────────────────────────────── */
+.ftd-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 28px;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* ── Header Card ──────────────────────────────────────────── */
+.ftd-header-card {
+  background: rgba(28, 28, 30, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 16px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+.ftd-roles-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ftd-role {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ftd-role--right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.ftd-role-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 3px 8px;
+  border-radius: 20px;
+  display: inline-block;
+  width: fit-content;
+}
+
+.ftd-role-badge--dealer {
+  background: rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ftd-role-badge--rater {
+  background: rgba(10, 132, 255, 0.18);
+  color: #4da3ff;
+  border: 1px solid rgba(10, 132, 255, 0.28);
+}
+
+.ftd-role-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ftd-vs-sep {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+  text-transform: uppercase;
+  padding: 0 4px;
+}
+
+.ftd-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ftd-deck-pill {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.38);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  letter-spacing: 0.02em;
+}
+
+.ftd-fail-track {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ftd-fail-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+}
+
+.ftd-dots {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.ftd-dot {
+  width: 26px;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.35s ease, box-shadow 0.35s ease;
+}
+
+.ftd-dot--on {
+  background: #ff3b30;
+  box-shadow: 0 0 8px rgba(255, 59, 48, 0.55);
+}
+
+/* ── Graveyard ────────────────────────────────────────────── */
+.ftd-grave-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ftd-section-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.25);
+  text-transform: uppercase;
+  padding: 0 2px;
+}
+
+.ftd-gy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  gap: 6px;
+}
+
+.ftd-gcard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  padding: 8px 4px 7px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 0.4s ease, border-color 0.4s ease, background 0.4s ease;
+}
+
+.ftd-gcard--done {
+  opacity: 0.22;
+  border-color: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ftd-grank {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1;
+}
+
+.ftd-gsuits {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px 3px;
+  justify-items: center;
+}
+
+.ftd-gs {
+  font-size: 11px;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.82);
+  transition: opacity 0.4s ease, color 0.4s ease;
+}
+
+.ftd-gs--red {
+  color: #ff3b30;
+}
+
+.ftd-gs--gone {
+  opacity: 0.1;
+  text-decoration: line-through;
+}
+
+/* ── Verdict Banner ───────────────────────────────────────── */
+.ftd-verdict-banner {
+  border-radius: 18px;
+  padding: 16px 18px 14px;
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: ftdVerdictIn 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes ftdVerdictIn {
+  from {
+    opacity: 0;
+    transform: scale(0.88) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.ftd-verdict--green {
+  background: rgba(52, 199, 89, 0.1);
+  border-color: rgba(52, 199, 89, 0.28);
+}
+
+.ftd-verdict--cyan {
+  background: rgba(50, 173, 230, 0.1);
+  border-color: rgba(50, 173, 230, 0.28);
+}
+
+.ftd-verdict--orange {
+  background: rgba(255, 149, 0, 0.1);
+  border-color: rgba(255, 149, 0, 0.28);
+}
+
+.ftd-verdict--purple {
+  background: rgba(175, 82, 222, 0.1);
+  border-color: rgba(175, 82, 222, 0.28);
+}
+
+.ftd-verdict-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ftd-verdict-text {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ftd-verdict-icon {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.ftd-verdict-head {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.35;
+}
+
+.ftd-verdict-sub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+.ftd-verdict-sub strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Revealed card shown next to verdict text */
+.ftd-v-card {
+  background: #ffffff;
+  border-radius: 10px;
+  width: 46px;
+  height: 62px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 7px 7px;
+  color: #000;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+  gap: 2px;
+  animation: ftdCardReveal 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: 0.1s;
+}
+
+.ftd-v-card.ftd-card--red {
+  color: #e00;
+}
+
+@keyframes ftdCardReveal {
+  from {
+    transform: rotateY(90deg) scale(0.8);
+    opacity: 0;
+  }
+
+  to {
+    transform: rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
+.ftd-vc-val {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ftd-vc-suit {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.ftd-verdict-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.ftd-next-btn {
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-body);
+  letter-spacing: 0.01em;
+}
+
+.ftd-next-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.ftd-next-btn:active {
+  transform: scale(0.96);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.ftd-wait-lbl {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ── Action Sheet ─────────────────────────────────────────── */
+.ftd-action-sheet {
+  background: rgba(28, 28, 30, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 20px;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  text-align: center;
+}
+
+.ftd-action-sheet--spec {
+  opacity: 0.75;
+  border-style: dashed;
+}
+
+.ftd-action-lbl {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.ftd-guess-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 9px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 15px;
+  color: #ffffff;
+  margin: 0 4px;
+  vertical-align: baseline;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.ftd-rater-name {
+  color: #34c759;
+  font-weight: 700;
+}
+
+.ftd-action-hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0;
+}
+
+.ftd-spec-role {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.3);
+  margin: 0;
+}
+
+.ftd-spectator-msg {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Draw Button ──────────────────────────────────────────── */
+.ftd-draw-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 16px 28px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all 0.2s ease;
+  letter-spacing: 0.01em;
+  width: 100%;
+}
+
+.ftd-draw-btn:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.ftd-draw-btn:active {
+  background: rgba(255, 255, 255, 0.16);
+  transform: scale(0.97);
+}
+
+/* ── Dealer Card (big, animated glow) ────────────────────── */
+.ftd-dealer-card-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.ftd-dealer-card {
+  width: 84px;
+  height: 116px;
+  background: #ffffff;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 10px 10px;
+  color: #1a1a1a;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.12);
+  gap: 3px;
+  animation: ftdCardGlow 2.5s ease-in-out infinite alternate;
+}
+
+.ftd-dealer-card.ftd-card--red {
+  color: #e00;
+}
+
+.ftd-dc-val {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ftd-dc-suit {
+  font-size: 22px;
+  line-height: 1;
+}
+
+@keyframes ftdCardGlow {
+  from {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.55),
+      0 0 0 1px rgba(255, 255, 255, 0.12);
+  }
+
+  to {
+    box-shadow:
+      0 10px 44px rgba(0, 0, 0, 0.65),
+      0 0 28px rgba(255, 255, 255, 0.08),
+      0 0 0 1px rgba(255, 255, 255, 0.22);
+  }
+}
+
+/* ── Rank Grid ────────────────────────────────────────────── */
+.ftd-rank-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+/* Last item (13th = A) spans remaining space for even look */
+.ftd-rank-grid .ftd-rank-btn:last-child:nth-child(4n+1) {
+  grid-column: span 4;
+}
+
+.ftd-rank-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 13px;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  padding: 13px 4px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.ftd-rank-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.ftd-rank-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(0.93);
+}
+
+/* ── Dealer Action Split (2-Spalten Layout: Karte links, Buttons rechts) ── */
+.ftd-dealer-action-split {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  gap: 14px;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.ftd-dealer-action-split .ftd-dealer-card {
+  flex-shrink: 0;
+  width: 88px;
+  height: 124px;
+  margin: 0 !important;
+}
+
+.ftd-dealer-hint-col {
+  width: 154px;
+  flex: 0 0 154px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.ftd-dealer-hint-col .ftd-hint-btn {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  margin: 0 !important;
+  padding: 6px 10px;
+}
+
+.ftd-hint-btn-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* ── Hint Row (legacy fallback) ──────────────────────────── */
+.ftd-hint-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.ftd-hint-btn {
+  flex: 1;
+  padding: 12px 6px 10px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-body);
+  letter-spacing: 0.04em;
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.ftd-hint-btn--low {
+  background: rgba(255, 149, 0, 0.12);
+  border: 1.5px solid rgba(255, 149, 0, 0.32);
+  color: #ff9500;
+}
+
+.ftd-hint-btn--high {
+  background: rgba(10, 132, 255, 0.12);
+  border: 1.5px solid rgba(10, 132, 255, 0.32);
+  color: #4da3ff;
+}
+
+.ftd-hint-btn--low:hover {
+  background: rgba(255, 149, 0, 0.2);
+}
+
+.ftd-hint-btn--high:hover {
+  background: rgba(10, 132, 255, 0.2);
+}
+
+.ftd-hint-btn--low:active {
+  transform: scale(0.96);
+  background: rgba(255, 149, 0, 0.28);
+}
+
+.ftd-hint-btn--high:active {
+  transform: scale(0.96);
+  background: rgba(10, 132, 255, 0.28);
+}
+
+/* Wrong / disabled hint button */
+.ftd-hint-btn--wrong,
+.ftd-hint-btn:disabled {
+  opacity: 0.18;
+  filter: grayscale(0.85);
+  cursor: not-allowed !important;
+  pointer-events: none;
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Correct / suggested hint button */
+.ftd-hint-btn--low.ftd-hint-btn--suggested {
+  background: rgba(255, 149, 0, 0.22);
+  border-color: #ff9500;
+  box-shadow:
+    0 0 20px rgba(255, 149, 0, 0.35),
+    inset 0 0 12px rgba(255, 149, 0, 0.15);
+  animation: ftdLowPulse 2s infinite ease-in-out;
+}
+
+.ftd-hint-btn--high.ftd-hint-btn--suggested {
+  background: rgba(10, 132, 255, 0.22);
+  border-color: #0a84ff;
+  box-shadow:
+    0 0 20px rgba(10, 132, 255, 0.35),
+    inset 0 0 12px rgba(10, 132, 255, 0.15);
+  animation: ftdHighPulse 2s infinite ease-in-out;
+}
+
+@keyframes ftdLowPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 14px rgba(255, 149, 0, 0.25), inset 0 0 8px rgba(255, 149, 0, 0.1);
+  }
+
+  50% {
+    box-shadow: 0 0 26px rgba(255, 149, 0, 0.5), inset 0 0 14px rgba(255, 149, 0, 0.25);
+  }
+}
+
+@keyframes ftdHighPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 14px rgba(10, 132, 255, 0.25), inset 0 0 8px rgba(10, 132, 255, 0.1);
+  }
+
+  50% {
+    box-shadow: 0 0 26px rgba(10, 132, 255, 0.5), inset 0 0 14px rgba(10, 132, 255, 0.25);
+  }
+}
+
+.ftd-hint-correct-indicator {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  line-height: 1;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* ── Hint Pill (shown to rater + spectators) ──────────────── */
+.ftd-hint-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 22px;
+  border-radius: 30px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  animation: ftdVerdictIn 0.3s ease both;
+}
+
+.ftd-hint-pill--high {
+  background: rgba(10, 132, 255, 0.14);
+  border: 1.5px solid rgba(10, 132, 255, 0.32);
+  color: #4da3ff;
+}
+
+.ftd-hint-pill--low {
+  background: rgba(255, 149, 0, 0.14);
+  border: 1.5px solid rgba(255, 149, 0, 0.32);
+  color: #ff9500;
+}
