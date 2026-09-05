@@ -8,7 +8,8 @@ const jsFiles = [
   'busfahrer.js',
   'pferderennen.js',
   'state.js',
-  'dd-logic.js'
+  'dd-logic.js',
+  'ftd.js'
 ];
 
 jsFiles.forEach(file => {
@@ -36,7 +37,7 @@ jsFiles.forEach(file => {
 });
 
 // 2. CSS-Dateien von Kommentaren befreien und minifizieren
-const cssFiles = ['style.css', 'pferderennen.css'];
+const cssFiles = ['style.css', 'pferderennen.css', 'ftd.css'];
 
 cssFiles.forEach(file => {
   const filePath = path.join(__dirname, file);
